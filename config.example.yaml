@@ -1,0 +1,45 @@
+# Copy to config.yaml and edit. config.yaml is git-ignored.
+
+motor:
+  backend: ble                # ble = FocusPLUS PRO directly over Bluetooth (run from Terminal.app)
+                              # link = edelkrone Link Adapter + 2022 edelkrone SDK
+
+ble:
+  address: null               # macOS CoreBluetooth id (see `ek-ble scan`); null = find by name FocusPsPr/FocusPlsPr
+  rate_hz: 30                 # loop rate; real send rate is capped by ~70 ms per Bluetooth write (~12-14/s)
+  read_hz: 3                  # position reads (they use write slots too - keep low)
+  status_hz: 1
+  max_speed_pct_s: 55         # motor tops out around 60 %/s of lens travel
+  deadband_pct: 0.05
+  connect_timeout_s: 10
+  lens_check_tolerance: 0.05  # motor cm vs lens map; larger relative mismatch blocks arming
+
+lens:
+  profile: lenses/lens-controller.json  # ble: made with `ek-ble map`; link: `ek-probe lens-map`
+
+unreal:
+  host: 192.168.1.50          # Windows PC running Unreal (Remote Control WebSocket server)
+  port: 30020
+  passphrase: null            # set if "Enforce passphrase for remote clients" is on
+  camera_path: null           # CineCameraComponent object path; null = auto-discover (see ue-probe find-cameras)
+  poll_hz: 60                 # how often we read CurrentFocusDistance
+  infinity_cm: 100000         # value written to UE when the lens is at infinity
+  feedback:
+    enabled: true
+    actor_path: null          # BP_EdelkroneFeedback instance path; null = auto-discover by name
+    rate_hz: 10
+
+bridge:
+  mode: ue_drives             # ue_drives | wheel_drives
+  latency_offset_ms: null     # lead to hide motor lag; null = backend default (ble 270 ms, link 0)
+  lead_smoothing_s: 0.15      # velocity smoothing for the lead predictor
+  ue_timeout_s: 1.0           # stop streaming if no UE value arrives for this long
+
+edelkrone:                    # only for motor.backend: link
+  sdk_url: http://127.0.0.1:32222/v1
+  link_id: "206938625333"
+  rate_hz: 30
+  status_rate_hz: 20
+  max_speed_enc_s: 120000
+  deadband_enc: 2
+  smoothing: 0.0

@@ -1,0 +1,284 @@
+{
+  "name": "lens-controller",
+  "created": "2026-11-04T13:54:05+00:00",
+  "notes": "built from FocusPLUS PRO cm readout (edelkrone app lens learning)",
+  "enc_limits": null,
+  "points": [
+    {
+      "distance_m": 14.92282,
+      "encoder": 100.0
+    },
+    {
+      "distance_m": 14.82128,
+      "encoder": 99.896
+    },
+    {
+      "distance_m": 14.32806,
+      "encoder": 99.389
+    },
+    {
+      "distance_m": 13.45247,
+      "encoder": 98.489
+    },
+    {
+      "distance_m": 12.83624,
+      "encoder": 97.855
+    },
+    {
+      "distance_m": 12.13588,
+      "encoder": 97.136
+    },
+    {
+      "distance_m": 11.338610000000001,
+      "encoder": 96.316
+    },
+    {
+      "distance_m": 10.429359999999999,
+      "encoder": 95.381
+    },
+    {
+      "distance_m": 9.445829999999999,
+      "encoder": 94.371
+    },
+    {
+      "distance_m": 8.35322,
+      "encoder": 93.248
+    },
+    {
+      "distance_m": 7.15094,
+      "encoder": 92.012
+    },
+    {
+      "distance_m": 5.171119999999999,
+      "encoder": 89.977
+    },
+    {
+      "distance_m": 3.37435,
+      "encoder": 86.879
+    },
+    {
+      "distance_m": 3.1387599999999996,
+      "encoder": 84.291
+    },
+    {
+      "distance_m": 2.88428,
+      "encoder": 81.496
+    },
+    {
+      "distance_m": 2.6064999999999996,
+      "encoder": 78.445
+    },
+    {
+      "distance_m": 2.28637,
+      "encoder": 74.928
+    },
+    {
+      "distance_m": 2.2356,
+      "encoder": 74.37
+    },
+    {
+      "distance_m": 2.16458,
+      "encoder": 73.59
+    },
+    {
+      "distance_m": 2.06348,
+      "encoder": 72.48
+    },
+    {
+      "distance_m": 1.98149,
+      "encoder": 71.579
+    },
+    {
+      "distance_m": 1.87513,
+      "encoder": 70.411
+    },
+    {
+      "distance_m": 1.78299,
+      "encoder": 69.399
+    },
+    {
+      "distance_m": 1.6474600000000001,
+      "encoder": 67.91
+    },
+    {
+      "distance_m": 1.5316999999999998,
+      "encoder": 66.639
+    },
+    {
+      "distance_m": 1.4745599999999999,
+      "encoder": 65.248
+    },
+    {
+      "distance_m": 1.4494399999999998,
+      "encoder": 64.218
+    },
+    {
+      "distance_m": 1.40836,
+      "encoder": 62.534
+    },
+    {
+      "distance_m": 1.3825,
+      "encoder": 61.474
+    },
+    {
+      "distance_m": 1.3339699999999999,
+      "encoder": 59.485
+    },
+    {
+      "distance_m": 1.28183,
+      "encoder": 57.347
+    },
+    {
+      "distance_m": 1.26693,
+      "encoder": 56.736
+    },
+    {
+      "distance_m": 1.22733,
+      "encoder": 55.113
+    },
+    {
+      "distance_m": 1.19775,
+      "encoder": 53.9
+    },
+    {
+      "distance_m": 1.16817,
+      "encoder": 52.688
+    },
+    {
+      "distance_m": 1.12748,
+      "encoder": 51.02
+    },
+    {
+      "distance_m": 1.10567,
+      "encoder": 50.126
+    },
+    {
+      "distance_m": 1.0402500000000001,
+      "encoder": 47.444
+    },
+    {
+      "distance_m": 1.02026,
+      "encoder": 46.625
+    },
+    {
+      "distance_m": 0.97726,
+      "encoder": 43.184
+    },
+    {
+      "distance_m": 0.9698699999999999,
+      "encoder": 42.336
+    },
+    {
+      "distance_m": 0.95184,
+      "encoder": 40.266
+    },
+    {
+      "distance_m": 0.94463,
+      "encoder": 39.439
+    },
+    {
+      "distance_m": 0.92702,
+      "encoder": 37.417
+    },
+    {
+      "distance_m": 0.91996,
+      "encoder": 36.607
+    },
+    {
+      "distance_m": 0.89666,
+      "encoder": 33.932
+    },
+    {
+      "distance_m": 0.8886700000000001,
+      "encoder": 33.016
+    },
+    {
+      "distance_m": 0.87461,
+      "encoder": 31.402
+    },
+    {
+      "distance_m": 0.86385,
+      "encoder": 30.166
+    },
+    {
+      "distance_m": 0.83931,
+      "encoder": 27.35
+    },
+    {
+      "distance_m": 0.8221200000000001,
+      "encoder": 25.377
+    },
+    {
+      "distance_m": 0.80292,
+      "encoder": 23.173
+    },
+    {
+      "distance_m": 0.77289,
+      "encoder": 19.725
+    },
+    {
+      "distance_m": 0.7583799999999999,
+      "encoder": 18.06
+    },
+    {
+      "distance_m": 0.74208,
+      "encoder": 16.189
+    },
+    {
+      "distance_m": 0.72604,
+      "encoder": 14.348
+    },
+    {
+      "distance_m": 0.70946,
+      "encoder": 12.445
+    },
+    {
+      "distance_m": 0.69914,
+      "encoder": 11.26
+    },
+    {
+      "distance_m": 0.6865600000000001,
+      "encoder": 9.816
+    },
+    {
+      "distance_m": 0.6729999999999999,
+      "encoder": 8.26
+    },
+    {
+      "distance_m": 0.6605,
+      "encoder": 6.825
+    },
+    {
+      "distance_m": 0.6541899999999999,
+      "encoder": 6.101
+    },
+    {
+      "distance_m": 0.64916,
+      "encoder": 5.523
+    },
+    {
+      "distance_m": 0.63449,
+      "encoder": 3.839
+    },
+    {
+      "distance_m": 0.62602,
+      "encoder": 2.867
+    },
+    {
+      "distance_m": 0.62075,
+      "encoder": 2.262
+    },
+    {
+      "distance_m": 0.61572,
+      "encoder": 1.686
+    },
+    {
+      "distance_m": 0.60824,
+      "encoder": 0.827
+    },
+    {
+      "distance_m": 0.60206,
+      "encoder": 0.118
+    }
+  ]
+}

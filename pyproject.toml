@@ -1,0 +1,34 @@
+[project]
+name = "edelkrone-unreal-connector"
+version = "0.1.0"
+description = "Middleware between Unreal Engine CineCamera focus and an edelkrone FocusPLUS PRO via the edelkrone SDK"
+requires-python = ">=3.10"
+dependencies = [
+  "httpx>=0.27",
+  "websockets>=12",
+  "pyyaml>=6",
+  "pyserial>=3.5",
+  "edelkrone>=0.1.1",
+  "bleak>=0.22",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+ek-probe = "tools.ek_probe:main"
+ue-probe = "tools.ue_probe:main"
+ek-bridge = "bridge.app:main"
+ek-ble = "tools.ek_ble:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["eklink*", "ekble*", "unreal*", "bridge*", "tools*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
