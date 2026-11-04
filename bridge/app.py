@@ -13,6 +13,7 @@ Keys while running (type + Enter):  a = arm/disarm   c = calibrate lens ends   m
   ek-bridge                    # uses ./config.yaml
   ek-bridge --mode wheel_drives
   ek-bridge --arm              # arm as soon as motor + Unreal are ready
+  ek-bridge --lens test-lens --calibrate   # after a lens change / motor power-on
 """
 from __future__ import annotations
 
@@ -309,6 +310,7 @@ def main(argv=None) -> None:
     ap.add_argument("--config")
     ap.add_argument("--mode", choices=MODES)
     ap.add_argument("--backend", choices=("ble", "link"))
+    ap.add_argument("--lens", help="lens profile name (lenses/NAME.json) or path; overrides lens.profile")
     ap.add_argument("--arm", action="store_true")
     ap.add_argument("--calibrate", action="store_true", help="find the lens end stops at startup if the motor needs it (moves the lens)")
     ap.add_argument("--ue-host")
@@ -325,6 +327,10 @@ def main(argv=None) -> None:
     cfg = load_config(a.config)
     if a.backend:
         cfg["motor"]["backend"] = a.backend
+    if a.lens:
+        from tools.common import lens_path
+
+        cfg["lens"]["profile"] = str(lens_path(cfg, a.lens))
     if a.lead_ms is not None:
         cfg["bridge"]["latency_offset_ms"] = a.lead_ms
     if a.ue_host:

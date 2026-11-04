@@ -12,6 +12,7 @@ rm -f "$log"
 {
   echo '#!/bin/zsh'
   echo "cd ${(q)ROOT}"
+  echo "export PYTHONUNBUFFERED=1   # live output through tee (interactive tools)"
   echo "echo '> $*'"
   echo "${(j: :)${(q)@}} 2>&1 | tee ${(q)log}"
   echo "echo \"exit=\${pipestatus[1]}\" | tee -a ${(q)log}"

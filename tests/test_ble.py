@@ -370,3 +370,25 @@ async def test_bridge_needs_calibration_when_direction_unknown(tmp_path):
         assert b.state == "NEEDS_CALIBRATION" and not dev.moves
     finally:
         await ue.stop()
+
+
+async def test_lens_map_wizard_forgiving_marks():
+    dev = FakeMotorDevice(pct=0, speed_pct_s=1000, lens_learned=False)
+    m = await _motor(dev)
+    prof = LensProfile("w")
+    wiz = LensMapWizard(m, prof)
+    await wiz.start()
+    await wiz.handle("0.6")                 # bare distance marks
+    await wiz.handle("g 50")
+    await wiz.handle("minf")                # no space
+    await wiz.handle("g 20")
+    await wiz.handle("m1.2")
+    await wiz.handle("g 90")
+    msg, _ = await wiz.handle("Infinity")   # re-mark infinity, any case
+    assert "marked inf" in msg
+    msg, _ = await wiz.handle("m")
+    assert "inf" in msg and "1.5" in msg     # explains how to mark
+    msg, _ = await wiz.handle("mark")
+    assert "unknown command" in msg and "inf" in msg
+    marks = {p.distance_m: round(p.encoder) for p in prof.points}
+    assert marks == {0.6: 0, 1.2: 20, INF: 90}

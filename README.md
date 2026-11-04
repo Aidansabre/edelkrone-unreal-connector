@@ -36,8 +36,20 @@ No edelkrone app needed. Keep the app closed: the motor allows one Bluetooth con
    - `python -m tools.sim_ue --port 30021` plays a fake focus pull.
    - `ek-bridge --arm --ue-port 30021 --log logs/run.csv` follows it.
 5. **Set up Unreal:** see [docs/unreal-setup.md](docs/unreal-setup.md). Check the link with `ue-probe read`.
-6. **Run:** `ek-bridge`. Keys (type + Enter): `a` arm/disarm, `c` calibrate, `m` switch `ue_drives`/`wheel_drives`,
-   `s` stats, `q` quit.
+6. **Run:** `ek-bridge` (or `ek-bridge --lens NAME`). Keys (type + Enter): `a` arm/disarm, `c` calibrate,
+   `m` switch `ue_drives`/`wheel_drives`, `s` stats, `q` quit.
+
+## Changing lenses
+All in Terminal. `ek-ble lenses` shows which profiles exist and whether they are calibrated and mapped.
+
+| Situation | Steps |
+|---|---|
+| **New lens** | 1. Mount the motor firmly. 2. `ek-ble calibrate --lens NAME` (asks closest focus or infinity once). 3. `ek-ble lens-map --lens NAME`. 4. `ek-bridge --lens NAME` |
+| **Known lens** | 1. Mount the motor firmly. 2. `ek-bridge --lens NAME --calibrate` (no questions; the slip check validates the mount) |
+| **Motor mounted on the other side of the lens** | `ek-ble calibrate --lens NAME --ask` (or `--confirm` to check visually), plus `--accept-span` if the slip check complains |
+| **Every motor power-on** | Calibrate again (`ek-bridge --calibrate` does it when needed) |
+
+- **Zoom lenses:** the focus scale can shift with focal length, so map at the focal length you shoot, or keep one profile per focal length (e.g. `zoom-24`, `zoom-70`).
 
 ## Measured performance (details in [docs/edelkrone-api.md](docs/edelkrone-api.md))
 - **Bluetooth:** ~70 ms per command, so about 12–14 commands per second.

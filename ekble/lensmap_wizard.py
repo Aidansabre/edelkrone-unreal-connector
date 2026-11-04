@@ -19,6 +19,7 @@ Lens mapping - focus on a target at a measured distance, then mark it.
   + / -          fine step  ({fine:g} %)          ++ / --   coarse step ({coarse:g} %)
   +3 / -0.5      step by that many %             g 42.5    go to 42.5 %
   m 1.2          mark current position as 1.2 m  (also: m 120cm, m 4ft, m inf)
+  1.2 / inf      a bare distance marks it too     (inf, infinity, ∞ = infinity)
   d 1.2          delete a mark                   l         list marks
   r              re-read position                s         save        q  quit (asks to save)
   ?              this help
@@ -27,6 +28,17 @@ Tip: mark the closest focus, infinity and 5-10 distances in between (more where 
 
 _DIST = re.compile(r"^\s*([0-9]*\.?[0-9]+)\s*(m|cm|mm|ft|in)?\s*$", re.I)
 _UNITS = {None: 1.0, "m": 1.0, "cm": 0.01, "mm": 0.001, "ft": 0.3048, "in": 0.0254}
+
+
+MARK_HINT = "to mark, type a distance: 1.5  120cm  4ft  inf   (or m 1.5)"
+
+
+def is_distance(text: str) -> bool:
+    try:
+        parse_distance(text)
+        return True
+    except ValueError:
+        return False
 
 
 def parse_distance(text: str) -> float:
@@ -74,6 +86,13 @@ class LensMapWizard:
         line = line.strip()
         if not line:
             return "", False
+        # Forgiving marking: "inf", "1.5", "120cm" -> mark; "minf" / "m1.5" -> "m inf" / "m 1.5"
+        if is_distance(line):
+            line = "m " + line
+        elif line[:1].lower() == "m" and len(line) > 1 and line[1] != " " and is_distance(line[1:]):
+            line = "m " + line[1:]
+        elif line.lower() == "m":
+            return MARK_HINT, False
         op, _, arg = line.partition(" ")
         arg = arg.strip()
         try:
@@ -117,7 +136,7 @@ class LensMapWizard:
             elif op in ("s", "q"):
                 return "", op == "q"
             else:
-                return "unknown command; ? for help", False
+                return f"unknown command {line!r} - {MARK_HINT}; ? for all commands", False
         except ValueError as e:
             return f"error: {e}", False
         return f"position: {self.pos:.2f}%" if self.pos is not None else "position: ?", False

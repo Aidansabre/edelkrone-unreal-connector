@@ -1,9 +1,45 @@
 {
   "name": "test-lens",
   "created": "2026-11-04T14:38:17+00:00",
-  "notes": "",
-  "enc_limits": null,
+  "notes": "mapped with ek-ble lens-map (percent of lens travel)",
+  "enc_limits": [
+    0.0,
+    100.0
+  ],
   "macro_encoder": "high",
   "probe_enc_span": 27890.0,
-  "points": []
+  "points": [
+    {
+      "distance_m": "inf",
+      "encoder": 96.66
+    },
+    {
+      "distance_m": 15.0,
+      "encoder": 93.502
+    },
+    {
+      "distance_m": 3.5,
+      "encoder": 82.234
+    },
+    {
+      "distance_m": 2.4,
+      "encoder": 75.666
+    },
+    {
+      "distance_m": 1.5,
+      "encoder": 61.934
+    },
+    {
+      "distance_m": 1.0,
+      "encoder": 42.922
+    },
+    {
+      "distance_m": 0.75,
+      "encoder": 21.98
+    },
+    {
+      "distance_m": 0.6,
+      "encoder": 0.0
+    }
+  ]
 }

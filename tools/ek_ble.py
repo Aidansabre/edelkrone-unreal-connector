@@ -3,6 +3,7 @@
 macOS: run from Terminal.app (Bluetooth permission). scripts/terminal.sh does that for you.
 
   ek-ble scan                       # list edelkrone units in range (listen-only)
+  ek-ble lenses                     # list lens profiles (calibrated? mapped?)
   ek-ble status                     # version, calibration flags, position (read-only)
   ek-ble calibrate --lens NAME      # end stops + 0 % = closest focus + slip check (moves the lens end to end!)
   ek-ble lens-map --lens NAME       # map distances for that lens with a focus chart (no app needed)
@@ -145,10 +146,58 @@ async def cmd_calibrate(m: BleFocusMotor, cfg, a):
         res = await calibrate(m, path, ask=ask, force_ask=a.ask, accept_span=a.accept_span, on_progress=progress)
     except SlipSuspected as e:
         raise SystemExit(f"CALIBRATION REJECTED: {e}")
+    if a.confirm:
+        from ekble.calibration import ensure_direction, _settle_at
+
+        await _settle_at(m, 0.0)
+        ans = (await ask("Parked at 0 %. Is the lens at CLOSEST FOCUS? [Y/n] ")).strip().lower()
+        if ans in ("n", "no"):
+            prof = LensProfile.load_or_new(path, path.stem)
+            prof.macro_encoder = "low" if prof.macro_encoder == "high" else "high"
+            end = await _settle_at(m, 0.0)
+            probe = await _settle_at(m, 25.0)
+            await ensure_direction(m, prof.macro_encoder, end, probe)
+            prof.save(path, require_points=False)
+            await _settle_at(m, 0.0)
+            print(f"flipped and saved: closest focus is the {prof.macro_encoder}-encoder end (check again: lens should be at closest focus now)")
     st = await m.read_status()
     p = await m.read_position()
     print(f"after:  {st}")
     print(f"position {p.percent if p else None}%  enc={await m.read_encoder()}  ({res})")
+
+
+def list_lenses(cfg) -> None:
+    """Lens profiles in lenses/: calibration facts and distance marks (no Bluetooth needed)."""
+    import json as _json
+
+    from eklink.lens import INF
+
+    current = None
+    try:
+        current = lens_path(cfg).resolve()
+    except SystemExit:
+        pass
+    files = sorted((ROOT / "lenses").glob("*.json"))
+    if not files:
+        print("no lens profiles yet - `ek-ble calibrate --lens NAME` creates one")
+    for f in files:
+        try:
+            prof = LensProfile.from_json(_json.loads(f.read_text()))
+        except Exception as e:
+            print(f"  {f.stem:24s} unreadable: {e}")
+            continue
+        marks = len(prof.points)
+        has_inf = any(p.distance_m == INF for p in prof.points)
+        near = min((p.distance_m for p in prof.points), default=None)
+        cal = "calibrated" if prof.macro_encoder and prof.probe_enc_span else (
+            "direction only" if prof.macro_encoder else "not calibrated by ek-ble")
+        if marks >= 2:
+            span = f"{marks} marks, {near * 100:.0f} cm .. {'inf' if has_inf else f'{max(p.distance_m for p in prof.points):.1f} m'}"
+        else:
+            span = "no distance map yet"
+        star = "*" if current and f.resolve() == current else " "
+        print(f"{star} {f.stem:24s} {cal:26s} {span}")
+    print("(* = config lens.profile)")
 
 
 async def cmd_abort(m: BleFocusMotor, cfg, a):
@@ -167,12 +216,14 @@ def main(argv=None) -> None:
     s = sub.add_parser("scan")
     s.add_argument("-s", "--seconds", type=float, default=10)
     s.add_argument("--all", action="store_true")
+    sub.add_parser("lenses", help="list lens profiles (no Bluetooth)")
     sub.add_parser("status")
     s = sub.add_parser("calibrate", help="find the lens end stops and set 0 %% = closest focus (replaces the edelkrone app)")
     s.add_argument("--yes", action="store_true")
     s.add_argument("--lens", help="lens name (lenses/NAME.json) or path; default: config lens.profile")
     s.add_argument("--ask", action="store_true", help="ask again which end is closest focus (e.g. after remounting the motor)")
     s.add_argument("--accept-span", action="store_true", help="store this calibration's encoder span as the new slip-check reference")
+    s.add_argument("--confirm", action="store_true", help="afterwards park at 0 %% and ask you to confirm it is closest focus (after a remount)")
     s.add_argument("--timeout", type=float, default=60)
     s = sub.add_parser("lens-map", help="interactive distance mapping with a focus chart (no edelkrone app needed)")
     s.add_argument("--lens", help="lens name (lenses/NAME.json) or path; default: config lens.profile")
@@ -194,6 +245,9 @@ def main(argv=None) -> None:
     sub.add_parser("abort")
     a = ap.parse_args(argv)
 
+    if a.cmd == "lenses":
+        list_lenses(load_config(a.config))
+        return
     if a.cmd == "scan":
         from tools.ble_scan import main as scan_main
 
