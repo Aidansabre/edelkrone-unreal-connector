@@ -8,6 +8,7 @@ Modes
   ue_drives    (default) UE CurrentFocusDistance -> lens map -> motor (with lag-compensating lead)
   wheel_drives the motor position is the source -> UE ManualFocusDistance (no motor commands sent)
 
+Web UI: http://127.0.0.1:8766 (calibration, lens mapping, settings, live view).
 Keys while running (type + Enter):  a = arm/disarm   c = calibrate lens ends   m = toggle mode   s = stats   q = quit
 
   ek-bridge                    # uses ./config.yaml
@@ -29,13 +30,14 @@ from unreal.camera import UECamera
 from unreal.rc_client import RCClient
 
 from .backends import READY, MotorBackend, make_backend
+from .control import BridgeControl
 
 log = logging.getLogger("bridge")
 
 MODES = ("ue_drives", "wheel_drives")
 
 
-class Bridge:
+class Bridge(BridgeControl):
     def __init__(self, cfg: dict, mode: str, backend: MotorBackend | None = None):
         self.cfg = cfg
         self.mode = mode
@@ -54,11 +56,18 @@ class Bridge:
         self.run_for: float | None = None
         self.calibrate_if_needed = False
         self.log_path: str | None = None
+        self.web: tuple[str, int] | None = None  # (bind, port) to serve the web UI on
+        self.needs_recal = False                  # set when the lens is switched at runtime
+        self._init_control()
 
     # ------------------------------------------------------------------ checks / arming
     async def check_motor(self) -> str:
         st = await self.backend.check()
-        if self.state != "ARMED" or st != READY:
+        if self.needs_recal and st in (READY, "NEEDS_LENS_MAP", "LENS_MISMATCH"):
+            st = "NEEDS_CALIBRATION"  # lens switched at runtime: calibrate before mapping or arming
+        if st == READY and self.calibrated_for is None:
+            self.calibrated_for = str(self.active_lens_path())  # motor already calibrated when we started
+        if self.state not in ("ARMED", "CALIBRATING") or st != READY:
             self.state = st
         return st
 
@@ -72,36 +81,33 @@ class Bridge:
     async def arm(self) -> None:
         ok, why = self.can_arm()
         if not ok:
-            print(f"\ncannot arm: {why}")
+            self.note(f"cannot arm: {why}", "warn")
             return
         self.predictor.reset()
         self._last_sample_t = None
         if self.mode == "ue_drives":
             self.backend.arm()
         self.state = "ARMED"
-        print(f"\nARMED ({self.mode}, lead {self.lead_s * 1000:.0f} ms)")
+        self.note(f"ARMED ({self.mode}, lead {self.lead_s * 1000:.0f} ms)")
 
     async def calibrate(self) -> None:
-        if not self.backend.can_calibrate:
-            print(f"\n{self.backend.name} backend: calibrate with its own tool")
-            return
-        if self.state == "ARMED":
-            await self.disarm()
-        self.state = "CALIBRATING"
-        print("\ncalibrating: the lens moves to both end stops ...")
+        """Keyboard `c` / --calibrate: same as the web UI's Calibrate button, then wait for it."""
         try:
-            await self.backend.calibrate(on_progress=lambda t, st: None)
-            print("calibration done")
+            await self.act_calibrate()
         except Exception as e:
-            print(f"calibration failed: {e}")
-        await self.check_motor()
+            self.note(f"cannot calibrate: {e}", "error")
+            return
+        await asyncio.sleep(0.05)
+        while self.busy:
+            await asyncio.sleep(0.2)
 
     async def disarm(self) -> None:
+        was_armed = self.state == "ARMED"
         if self.backend.armed:
             await self.backend.disarm(abort=True)
-        if self.state == "ARMED":
+        if was_armed:
             self.state = READY
-        print("\nDISARMED")
+            self.note("DISARMED")
 
     # ------------------------------------------------------------------ loops
     def _ue_target_motor(self) -> float | None:
@@ -144,11 +150,9 @@ class Bridge:
 
     async def feedback_loop(self) -> None:
         fb = self.cfg["unreal"]["feedback"]
-        if not fb["enabled"]:
-            return
         period = 1.0 / fb["rate_hz"]
         while not self._stop.is_set():
-            if self.rc.connected.is_set():
+            if fb["enabled"] and self.rc.connected.is_set():
                 try:
                     await self.cam.write_feedback(self.backend.position_cm(), self.backend.position_motor(),
                                                   f"{self.state}/{self.mode}")
@@ -159,7 +163,7 @@ class Bridge:
     async def watchdog_loop(self) -> None:
         """Re-checks the motor while not armed; disarms if motor data goes stale while armed."""
         while not self._stop.is_set():
-            if self.state not in ("ARMED", "CALIBRATING"):
+            if self.state not in ("ARMED", "CALIBRATING") and not self.busy:
                 try:
                     await self.check_motor()
                 except Exception as e:
@@ -255,6 +259,14 @@ class Bridge:
         print(f"motor={self.backend.name} lens={lens} state={self.state} mode={self.mode} UE={self.rc.url}")
         if self.state != READY:
             print(f"  -> {self.backend.stats().get('last_error') or self.state}")
+        if self.web:
+            from .web import PortInUse, start
+
+            try:
+                self._web_server = start(self, asyncio.get_running_loop(), *self.web)
+                print(f"web UI: http://{'127.0.0.1' if self.web[0] in ('0.0.0.0', '') else self.web[0]}:{self.web[1]}")
+            except PortInUse as e:
+                print(f"web UI disabled: {e}")
         tasks = [asyncio.create_task(c) for c in self.backend.tasks()] + [
             asyncio.create_task(self.cam.poll_loop()),
             asyncio.create_task(self.control_loop()),
@@ -286,6 +298,8 @@ class Bridge:
     async def shutdown(self, tasks) -> None:
         print("\nshutting down")
         self._stop.set()
+        if getattr(self, "_web_server", None):
+            self._web_server.shutdown()
         self.backend.stop()
         try:
             await self.backend.disarm(abort=True)
@@ -319,6 +333,13 @@ def main(argv=None) -> None:
     ap.add_argument("--run-for", type=float, help="quit after N seconds (testing)")
     ap.add_argument("--log", help="write a CSV of UE target vs motor position (testing/tuning)")
     ap.add_argument("--no-input", action="store_true", help="don't read keyboard commands")
+    ap.add_argument("--no-ui", action="store_true", help="don't serve the web UI")
+    ap.add_argument("--web-port", type=int, default=8766)
+    ap.add_argument("--web-bind", default="127.0.0.1",
+                    help="address for the web UI (default loopback only; 0.0.0.0 exposes it - no authentication!)")
+    ap.add_argument("--open", action="store_true", help="open the web UI in the default browser")
+    ap.add_argument("--simulate", action="store_true",
+                    help="simulated FocusPLUS PRO (no Bluetooth) - try the web UI and settings without hardware")
     ap.add_argument("-v", "--verbose", action="store_true")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if a.verbose else logging.INFO, format="\n%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -337,9 +358,35 @@ def main(argv=None) -> None:
         cfg["unreal"]["host"] = a.ue_host
     if a.ue_port:
         cfg["unreal"]["port"] = a.ue_port
-    bridge = Bridge(cfg, a.mode or cfg["bridge"]["mode"])
+    backend = None
+    if a.simulate:
+        from ekble.motor import BleFocusMotor
+        from ekble.sim import FakeMotorDevice, fake_motor_factory
+
+        from .backends import BleBackend
+
+        cfg["motor"]["backend"] = "ble"
+        # never let the simulator see or touch real lens profiles
+        cfg["lens"]["dir"] = "lenses/sim"
+        from tools.common import lens_path
+
+        cfg["lens"]["profile"] = str(lens_path(cfg, a.lens or "sim-demo"))
+        dev = FakeMotorDevice(lens_ends_known=False, pct=40, speed_pct_s=60, lag_s=0.25, lens_learned=False)
+        dev.calib_s = 4.0
+        dev.write_delay_s = 0.06  # like the real ~70 ms Bluetooth writes
+        factory, finder = fake_motor_factory(dev)
+        backend = BleBackend(cfg, motor=BleFocusMotor(client_factory=factory, finder=finder))
+        print("SIMULATED motor - no hardware is moved")
+    bridge = Bridge(cfg, a.mode or cfg["bridge"]["mode"], backend=backend)
     bridge.run_for = a.run_for
     bridge.calibrate_if_needed = a.calibrate
+    if not a.no_ui:
+        bridge.web = (a.web_bind, a.web_port)
+        if a.open:
+            import threading
+            import webbrowser
+
+            threading.Timer(1.5, lambda: webbrowser.open(f"http://127.0.0.1:{a.web_port}")).start()
     bridge.log_path = a.log
     if a.no_input:
         bridge.input_loop = lambda: asyncio.sleep(10**9)

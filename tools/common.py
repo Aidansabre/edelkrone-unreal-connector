@@ -34,7 +34,7 @@ DEFAULTS: dict[str, Any] = {
         "deadband_enc": 2,
         "smoothing": 0.0,
     },
-    "lens": {"profile": None},
+    "lens": {"profile": None, "dir": "lenses"},
     "unreal": {
         "host": "127.0.0.1",
         "port": 30020,
@@ -64,10 +64,16 @@ def load_config(path: str | Path | None = None) -> dict:
     return _merge(DEFAULTS, data or {})
 
 
+def lens_dir(cfg: dict) -> Path:
+    return resolve_path(cfg.get("lens", {}).get("dir") or "lenses")
+
+
 def lens_path(cfg: dict, name: str | None = None) -> Path:
     """--lens NAME -> lenses/NAME.json; a path is used as is; default: config lens.profile."""
     if name:
-        return resolve_path(name) if (name.endswith(".json") or "/" in name) else ROOT / "lenses" / f"{name}.json"
+        if name.endswith(".json") or "/" in name:
+            return resolve_path(name)
+        return lens_dir(cfg) / f"{name}.json"
     if not cfg["lens"]["profile"]:
         raise SystemExit("no lens selected: pass --lens NAME or set lens.profile in config.yaml")
     return resolve_path(cfg["lens"]["profile"])

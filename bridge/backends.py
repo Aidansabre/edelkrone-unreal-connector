@@ -42,8 +42,18 @@ class MotorBackend:
     default_lead_s = 0.0
     can_calibrate = False
 
-    async def calibrate(self, on_progress=None) -> None:
+    async def calibrate(self, on_progress=None, ask=None, accept_span: bool = False, force_ask: bool = False,
+                        say=None) -> dict:
         raise NotImplementedError("this backend can't calibrate from the bridge")
+
+    async def move_percent(self, pct: float) -> None:
+        raise NotImplementedError("manual moves are only available with the Bluetooth backend")
+
+    async def stop_motion(self) -> None:
+        await self.disarm(abort=True)
+
+    async def fresh_position(self) -> float | None:
+        return self.position_motor()
 
     def __init__(self, cfg: dict):
         self.cfg = cfg
@@ -128,10 +138,10 @@ class BleBackend(MotorBackend):
             return "NO_STATUS"
         if not st.lens_ends_known or not st.direction_known:
             what = "lens ends not known" if not st.lens_ends_known else "focus direction not set"
-            self.last_problem = f"{what}: press c (or run `ek-ble calibrate`) - moves the lens end to end"
+            self.last_problem = f"{what} - calibrate (web UI button, key c, or `ek-ble calibrate`); the lens moves end to end"
             return "NEEDS_CALIBRATION"
         if self.lens is None:
-            self.last_problem = "no lens map: run `ek-ble lens-map` (focus chart) and set lens.profile"
+            self.last_problem = "this lens has no distance map yet - map it (web UI or `ek-ble lens-map`)"
             return "NEEDS_LENS_MAP"
         # Lens sanity: the motor's own cm readout vs our map at the current position.
         m = self.motor.state
@@ -146,7 +156,8 @@ class BleBackend(MotorBackend):
 
     can_calibrate = True
 
-    async def calibrate(self, on_progress=None) -> None:
+    async def calibrate(self, on_progress=None, ask=None, accept_span: bool = False, force_ask: bool = False,
+                        say=None) -> dict:
         """End stops (cmd 16) + direction (cmd 33) + slip check, using the configured lens profile."""
         from ekble.calibration import calibrate
 
@@ -154,8 +165,32 @@ class BleBackend(MotorBackend):
             raise ConnectionError(self.last_problem or "motor not connected")
         self.streamer.armed = False
         path = resolve_path(self.cfg["lens"]["profile"])
-        await calibrate(self.motor, path, ask=None, on_progress=on_progress, say=lambda s: log.info(s))
+        res = await calibrate(self.motor, path, ask=ask, accept_span=accept_span, force_ask=force_ask,
+                              on_progress=on_progress, say=say or (lambda s: log.info(s)))
         self.lens = _load_lens(self.cfg)  # direction/slip facts may have been added
+        if self.lens:
+            self.streamer.limits = self.lens.encoder_range
+        return res
+
+    async def move_percent(self, pct: float) -> None:
+        """Manual positioning (lens mapping / UI). Refused while streaming."""
+        if self.streamer.armed:
+            raise RuntimeError("disarm before moving the lens by hand")
+        if not await self._ensure_connected():
+            raise ConnectionError(self.last_problem or "motor not connected")
+        st = self.motor.state.status
+        if not st or not st.lens_ends_known:
+            raise RuntimeError("calibrate first: the motor does not know the lens end stops")
+        await self.motor.move_percent(max(0.0, min(100.0, pct)))
+
+    async def stop_motion(self) -> None:
+        self.streamer.armed = False
+        if self.motor.connected:
+            await self.motor.abort()
+
+    async def fresh_position(self) -> float | None:
+        p = await self.motor.read_position()
+        return p.percent if p else None
 
     def tasks(self) -> list:
         return [self.streamer.run()]

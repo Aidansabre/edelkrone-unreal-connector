@@ -49,6 +49,7 @@ class FocusStreamer:
         self.deadband_pct = deadband_pct
         self.limits = limits
         self.stats = StreamStats()
+        self.idle_read_hz = 8.0  # faster position feedback while not streaming (manual moves, mapping)
         self.armed = False
         self._target: float | None = None
         self._cmd: float | None = None
@@ -123,7 +124,8 @@ class FocusStreamer:
             if self.status_hz and now - self._last_status_t >= 1.0 / self.status_hz:
                 self._last_status_t = now
                 await m.request_status()
-            elif self.read_hz and now - self._last_read_t >= 1.0 / self.read_hz:
+            elif (rh := (self.read_hz if self.armed else max(self.read_hz, self.idle_read_hz))) and \
+                    now - self._last_read_t >= 1.0 / rh:
                 self._last_read_t = now
                 await m.request_position()
                 self.stats.reads_sent += 1

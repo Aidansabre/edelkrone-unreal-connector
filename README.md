@@ -19,9 +19,25 @@ as `motor.backend: link`. It can't see this motor without updates edelkrone no l
 cp config.example.yaml config.yaml      # set ble.address and unreal.host
 ```
 On macOS, Bluetooth only works from **Terminal.app**, which needs Bluetooth permission.
-`scripts/terminal.sh <name> <command…>` runs any command there; `Run Bridge.command` starts the bridge.
+`scripts/terminal.sh <name> <command…>` runs any command there.
 
-## Workflow
+## Web UI (the easy way)
+Double-click **`Run Bridge.command`**. It starts the bridge in Terminal and opens **http://127.0.0.1:8766**,
+where everything below can be done with buttons:
+
+| Area | What you can do |
+|---|---|
+| **Status bar** | Motor (battery, firmware, ms per command), Unreal link, active lens, bridge state |
+| **Live** | ARM/DISARM (`space`), Stop, Unreal → lens / lens → Unreal. Unreal distance → command → lens position, with a 15 s chart |
+| **Setup** | Checklist (motor · lens · calibration · map). Pick or create a lens. **Calibrate**: the closest-focus/infinity question appears as a dialog; a slip offers "accept new mount" |
+| **Distance map** | Jog (−5 … +5 %, or `←`/`→` with `shift`), slider, go to %. Type a distance and **Mark** (or **Mark infinity**). Marks table with go/delete, map plot, Save |
+| **Unreal / Motion settings** | Host/port/passphrase, find cameras, feedback, lead, speed limit. They apply live; **Save as startup default** writes `config.yaml` |
+
+- **Try it without hardware:** `ek-bridge --simulate --open`. The simulated motor uses its own lens folder (`lenses/sim/`), so real profiles are never touched. Add `python -m tools.sim_ue --port 30021` and `--ue-port 30021` for a fake Unreal pull.
+- **Network access:** the UI binds to loopback. Opening it to other machines (`--web-bind 0.0.0.0`) has no authentication, and it moves a lens.
+- **Single connection:** the motor accepts one Bluetooth connection, so while the bridge runs, use the web UI rather than `ek-ble`.
+
+## Workflow (command line)
 No edelkrone app needed. Keep the app closed: the motor allows one Bluetooth connection at a time.
 1. **Mount the motor firmly** on the lens. A loose gear slips at the end stops; the calibration detects that and rejects it.
 2. **Calibrate:** `ek-ble calibrate --lens NAME`, after every motor power-on (or let the bridge do it: `ek-bridge --calibrate`, or key `c`).
@@ -58,4 +74,4 @@ All in Terminal. `ek-ble lenses` shows which profiles exist and whether they are
 - **Static positioning:** ≤ 0.1 %.
 
 ## Tests
-`.venv/bin/pytest`: 46 tests, run offline against a simulated motor (real frames), a fake SDK and a fake Remote Control server.
+`.venv/bin/pytest`: 48 tests, run offline against a simulated motor (real frames), a fake SDK and a fake Remote Control server.
