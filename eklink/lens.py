@@ -53,6 +53,9 @@ class LensProfile:
     points: list[LensPoint] = field(default_factory=list)
     enc_limits: tuple[float, float] | None = None  # (min, max) measured end stops after calibration
     notes: str = ""
+    # Rig facts for the Bluetooth backend (per lens: depends on the lens's ring direction and the mount)
+    macro_encoder: str | None = None    # "high" | "low": raw-encoder end that is closest focus
+    probe_enc_span: float | None = None  # |enc(25 %) - enc(0 %)| after a good calibration (slip check)
     created: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
 
     # ------------------------------------------------------------------ construction / io
@@ -83,6 +86,8 @@ class LensProfile:
             "created": self.created,
             "notes": self.notes,
             "enc_limits": list(self.enc_limits) if self.enc_limits else None,
+            "macro_encoder": self.macro_encoder,
+            "probe_enc_span": self.probe_enc_span,
             "points": [p.to_json() for p in self.points],
         }
 
@@ -94,13 +99,23 @@ class LensProfile:
             enc_limits=tuple(d["enc_limits"]) if d.get("enc_limits") else None,
             notes=d.get("notes", ""),
             created=d.get("created", ""),
+            macro_encoder=d.get("macro_encoder"),
+            probe_enc_span=d.get("probe_enc_span"),
         )
         prof._sort()
         return prof
 
-    def save(self, path: str | Path) -> None:
-        self.validate()
+    def save(self, path: str | Path, require_points: bool = True) -> None:
+        if require_points:
+            self.validate()
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(json.dumps(self.to_json(), indent=2) + "\n")
+
+    @classmethod
+    def load_or_new(cls, path: str | Path, name: str) -> "LensProfile":
+        """Load without validation (a profile may hold only calibration facts, no marks yet)."""
+        p = Path(path)
+        return cls.from_json(json.loads(p.read_text())) if p.exists() else cls(name=name)
 
     @classmethod
     def load(cls, path: str | Path) -> "LensProfile":

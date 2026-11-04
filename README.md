@@ -22,15 +22,22 @@ On macOS, Bluetooth only works from **Terminal.app**, which needs Bluetooth perm
 `scripts/terminal.sh <name> <command…>` runs any command there; `Run Bridge.command` starts the bridge.
 
 ## Workflow
-1. **Calibrate:** in the **edelkrone app**, calibrate the lens and do lens learning (distances).
-   Then **quit the app**: the motor allows only one Bluetooth connection. Calibration lasts until the motor is powered off.
-2. **Check:** `ek-ble status` should show lens ends known, distances learned, `FOLLOW_FOCUS_ONLY`.
-3. **Map once per lens:** `ek-ble map` sweeps the lens once and saves `lenses/lens-controller.json`.
+No edelkrone app needed. Keep the app closed: the motor allows one Bluetooth connection at a time.
+1. **Mount the motor firmly** on the lens. A loose gear slips at the end stops; the calibration detects that and rejects it.
+2. **Calibrate:** `ek-ble calibrate --lens NAME`, after every motor power-on (or let the bridge do it: `ek-bridge --calibrate`, or key `c`).
+   - Drives to both end stops (~10–15 s), then sets 0 % = closest focus and checks for gear slip.
+   - The first time for a lens, it asks whether the lens is at closest focus or infinity and remembers the answer in `lenses/NAME.json`.
+3. **Map, once per lens:** run `ek-ble lens-map --lens NAME` with a focus target at measured distances.
+   Focus with `+`/`-`/`++`/`--`/`g 42`, then mark with `m 1.2` (or `m 120cm`, `m 4ft`, `m inf`). Save with `s`.
+   - Mark closest focus, **infinity where far objects are sharp** (the end stop is often beyond it), and 5–10 distances in between.
+   - The map is stored as % of lens travel, so it survives power cycles. The bridge never drives past the outermost marks.
+   - Set `lens.profile` in `config.yaml` to `lenses/NAME.json`.
 4. **Try it without Unreal (optional):**
    - `python -m tools.sim_ue --port 30021` plays a fake focus pull.
    - `ek-bridge --arm --ue-port 30021 --log logs/run.csv` follows it.
 5. **Set up Unreal:** see [docs/unreal-setup.md](docs/unreal-setup.md). Check the link with `ue-probe read`.
-6. **Run:** `ek-bridge`. Keys (type + Enter): `a` arm/disarm, `m` switch `ue_drives`/`wheel_drives`, `s` stats, `q` quit.
+6. **Run:** `ek-bridge`. Keys (type + Enter): `a` arm/disarm, `c` calibrate, `m` switch `ue_drives`/`wheel_drives`,
+   `s` stats, `q` quit.
 
 ## Measured performance (details in [docs/edelkrone-api.md](docs/edelkrone-api.md))
 - **Bluetooth:** ~70 ms per command, so about 12–14 commands per second.
@@ -39,4 +46,4 @@ On macOS, Bluetooth only works from **Terminal.app**, which needs Bluetooth perm
 - **Static positioning:** ≤ 0.1 %.
 
 ## Tests
-`.venv/bin/pytest`: 32 tests, run offline against a simulated motor (real frames), a fake SDK and a fake Remote Control server.
+`.venv/bin/pytest`: 46 tests, run offline against a simulated motor (real frames), a fake SDK and a fake Remote Control server.

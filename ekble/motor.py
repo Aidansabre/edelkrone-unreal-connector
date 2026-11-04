@@ -198,6 +198,34 @@ class BleFocusMotor:
     async def abort(self) -> None:
         await self.write(P.cmd_abort())
 
+    async def set_direction(self, arg: int) -> None:
+        await self.write(P.cmd_focus_direction(arg))
+
+    async def calibrate_lens_ends(self, timeout: float = 60.0, on_progress=None) -> P.Status | None:
+        """Drive to both lens end stops (FocusPLUS PRO firmware does it) and wait until done.
+
+        The motor reports state LENS_CALIBRATING while sweeping; afterwards lens_ends_known is set
+        and move-to-percent works. MOVES THE LENS END TO END (typically 10-25 s).
+        """
+        await self.write(P.cmd_calibrate_lens_ends())
+        t0 = time.monotonic()
+        seen_busy = False
+        while time.monotonic() - t0 < timeout:
+            await asyncio.sleep(0.4)
+            st = await self.read_status(timeout=1.0)
+            if st is None:
+                continue
+            busy = st.state not in ("IDLE",)
+            seen_busy |= busy
+            if on_progress:
+                on_progress(time.monotonic() - t0, st)
+            if not busy and (seen_busy or time.monotonic() - t0 > 3.0) and st.lens_ends_known:
+                return st
+            if not busy and not seen_busy and time.monotonic() - t0 > 5.0:
+                raise RuntimeError(f"motor did not start calibrating (state {st.state})")
+        await self.abort()
+        raise TimeoutError(f"lens calibration did not finish within {timeout:.0f} s (aborted)")
+
     async def wait_settled(self, target: float | None = None, tol: float = 0.3, timeout: float = 10.0) -> P.Position | None:
         """Poll position until it stops changing (and is within tol of target, if given)."""
         end = time.monotonic() + timeout

@@ -64,6 +64,15 @@ def load_config(path: str | Path | None = None) -> dict:
     return _merge(DEFAULTS, data or {})
 
 
+def lens_path(cfg: dict, name: str | None = None) -> Path:
+    """--lens NAME -> lenses/NAME.json; a path is used as is; default: config lens.profile."""
+    if name:
+        return resolve_path(name) if (name.endswith(".json") or "/" in name) else ROOT / "lenses" / f"{name}.json"
+    if not cfg["lens"]["profile"]:
+        raise SystemExit("no lens selected: pass --lens NAME or set lens.profile in config.yaml")
+    return resolve_path(cfg["lens"]["profile"])
+
+
 def resolve_path(p: str | Path) -> Path:
     p = Path(p)
     return p if p.is_absolute() else ROOT / p

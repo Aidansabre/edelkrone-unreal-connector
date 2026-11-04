@@ -174,3 +174,59 @@ What the table shows:
 - **Throughput:** about 310 targets in 30 s with 0 errors; writes take 64–87 ms; Unreal reads take ~1 ms (local simulator).
 - **Read/status scheduling is time-based**, because Bluetooth writes cap the loop at ~12 ticks/s.
 - **Arming:** the motor travels from wherever it is to the first target at `max_speed_pct_s`, so park it near the shot's start focus before arming.
+
+## Commands decoded from the 2022 SDK (2026-11-04)
+The 2022 edelkrone SDK binary (`edelkrone SDK.app/Contents/MacOS/edelkrone_sdk`, x86_64) contains edelkrone's C `libFocusPlus` **with symbols**. Disassembling it (`otool -tvV -p _libFocusPlus_<name>`) gives the commands that are missing from the new SDK's tables. Frames are `[len, cmd, payload…, sum16_BE]`.
+
+| Function | cmd | Payload | Status |
+|---|---|---|---|
+| `simpleLensCalibration` | **16** | — (`02 10 00 12`) | **Verified.** Lens end-stop calibration. The 2022 SDK's `calibrate` for a FocusPLUS PRO sends only this command. |
+| `statusGet` | 17 | — | Matches the new SDK, which confirms the decoding. |
+| `focusDirectionCalibration` | 33 | u8 | Not used. |
+| `lensLearnCommand` | 31 | u8 sub-command, u8 arg, u16 (cm × 10) | Not used; sub-command values unknown. |
+| `lensModelTransfer` | 30 | u8 n, s32 (header float), n × (u24 cm × 100, u24 encoder) | Not used; would upload a distance table into the motor. |
+| `numericControlMove` | 6 | s32 (value × 1000) | Not used; units unconfirmed (possibly cm). |
+| `dynamicMoveRelative` | 25 | s32 (value × 100) | Not used. |
+| `numericControlSave` / `…_withFocusValueInEncoder` | 23 / 39 | slot, u32, value | Not used. |
+| `keyposeSlide` | 12 | … | Not used. |
+| `periodicWakeupTimeSet` | 26 | u32 | Not used. |
+| `keyposeUniqueIdGet` | 24 | — | Not used. |
+| `configurationSet` | 201 | u8 | Matches the new SDK. |
+
+### Calibration and mapping without the edelkrone app
+**`ek-ble calibrate`** (cmd 16) on the real motor:
+- the state goes to `LENS_CALIBRATING` within 0.5 s and back to `IDLE` at 11.6 s;
+- afterwards lens ends known = 1 and the position is 0.0 %.
+
+Recalibrating **clears distances learned in the edelkrone app** (lens learned → 0). App lens learning therefore doesn't survive a recalibration.
+
+**`ek-ble lens-map`** is an interactive mapping tool with a focus chart:
+- It moves in % steps (fine 0.2 %, coarse 2 %, or any step / absolute %) and marks distances (`m 1.2`, `m 120cm`, `m 4ft`, `m inf`).
+- It saves a `LensProfile` of distance → % of travel. Because % is measured from the calibrated end stops, the map survives power cycles.
+- **Real-motor check:** go to 30 % → 29.92; +0.2 → 30.09; +2 → 32.08; −0.5 → 31.70; +3 → 34.69. Small moves can stop about 0.1 % short.
+
+**Bridge:** shows `NEEDS_CALIBRATION` until calibrated; key `c` or `ek-bridge --calibrate` runs cmd 16.
+
+**Not yet verified:** calibrating from a freshly powered-on, uncalibrated motor. So far it was tested from an already calibrated state.
+
+### Focus direction, per-lens calibration and slip check (2026-11-04)
+- **Direction:** after a bare end-stop calibration (cmd 16) on a freshly powered motor, the status direction flag (bit 3) is 0. The firmware then picks which end is 0 % from the sweep; in one session 0 % was infinity, in another closest focus.
+- **Cmd 33 `focusDirectionCalibration(u8)`** fixes this. It is the edelkrone app's "AM I ON MACRO OR INFINITY?" step. It sets the flag and doesn't move the lens. Measured at the infinity end (encoder −111,203):
+
+  | Argument | Result |
+  |---|---|
+  | 0 | 0 % at the low-encoder end (0.09 %) |
+  | 1 | 0 % at the high-encoder end (99.9 % at that spot) |
+
+- **Persistence:** the direction survives a re-run of cmd 16 in the same power session; power-off clears it.
+- **Which encoder end is closest focus** depends on the lens's ring direction and the mount. It is therefore stored **per lens profile** (`macro_encoder`).
+- **`ek-ble calibrate --lens NAME`** runs:
+  1. cmd 16;
+  2. a move to 0 %, then a probe at 25 % to see which way the % scale points;
+  3. cmd 33 with the stored `macro_encoder`, verified by the probe reading (no motion).
+
+  The first time for a lens (or with `--ask`), it parks at an end and asks "closest focus or infinity?".
+- **Slip check:** the profile stores `probe_enc_span` = |enc(25 %) − enc(0 %)| from the first good calibration. Later calibrations differing by > 5 % are rejected (`--accept-span` after a deliberate remount).
+  - It was motivated by a real slip (loose mount): that calibration took 18.1 s (vs 11–13 s), and 25 % sat 64,500 counts from 0 % instead of ~27,800.
+  - The firmware sweep speed isn't adjustable: cmd 16 takes no parameters, and the 2022 library has no calibration-speed setting.
+- **The infinity end stop is beyond infinity on some lenses** (yes on the current one). Map `inf` with `ek-ble lens-map` where far objects are sharp. The bridge limits motion to the outermost marks and maps any UE distance beyond the furthest mark to it.

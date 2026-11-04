@@ -8,7 +8,7 @@ Modes
   ue_drives    (default) UE CurrentFocusDistance -> lens map -> motor (with lag-compensating lead)
   wheel_drives the motor position is the source -> UE ManualFocusDistance (no motor commands sent)
 
-Keys while running (type + Enter):  a = arm/disarm   m = toggle mode   s = stats   q = quit
+Keys while running (type + Enter):  a = arm/disarm   c = calibrate lens ends   m = toggle mode   s = stats   q = quit
 
   ek-bridge                    # uses ./config.yaml
   ek-bridge --mode wheel_drives
@@ -51,6 +51,7 @@ class Bridge:
         self._last_wheel_write: float | None = None
         self._stop = asyncio.Event()
         self.run_for: float | None = None
+        self.calibrate_if_needed = False
         self.log_path: str | None = None
 
     # ------------------------------------------------------------------ checks / arming
@@ -78,6 +79,21 @@ class Bridge:
             self.backend.arm()
         self.state = "ARMED"
         print(f"\nARMED ({self.mode}, lead {self.lead_s * 1000:.0f} ms)")
+
+    async def calibrate(self) -> None:
+        if not self.backend.can_calibrate:
+            print(f"\n{self.backend.name} backend: calibrate with its own tool")
+            return
+        if self.state == "ARMED":
+            await self.disarm()
+        self.state = "CALIBRATING"
+        print("\ncalibrating: the lens moves to both end stops ...")
+        try:
+            await self.backend.calibrate(on_progress=lambda t, st: None)
+            print("calibration done")
+        except Exception as e:
+            print(f"calibration failed: {e}")
+        await self.check_motor()
 
     async def disarm(self) -> None:
         if self.backend.armed:
@@ -142,7 +158,7 @@ class Bridge:
     async def watchdog_loop(self) -> None:
         """Re-checks the motor while not armed; disarms if motor data goes stale while armed."""
         while not self._stop.is_set():
-            if self.state != "ARMED":
+            if self.state not in ("ARMED", "CALIBRATING"):
                 try:
                     await self.check_motor()
                 except Exception as e:
@@ -203,6 +219,8 @@ class Bridge:
             cmd = line.strip().lower()
             if cmd == "a":
                 await (self.disarm() if self.state == "ARMED" else self.arm())
+            elif cmd == "c":
+                await self.calibrate()
             elif cmd == "m":
                 await self.disarm()
                 self.mode = MODES[(MODES.index(self.mode) + 1) % len(MODES)]
@@ -244,6 +262,8 @@ class Bridge:
             asyncio.create_task(self.status_line_loop()),
             asyncio.create_task(self.input_loop()),
         ]
+        if self.calibrate_if_needed and self.state == "NEEDS_CALIBRATION":
+            await self.calibrate()
         if arm:
             asyncio.create_task(self._arm_when_ready())
         if self.log_path:
@@ -290,6 +310,7 @@ def main(argv=None) -> None:
     ap.add_argument("--mode", choices=MODES)
     ap.add_argument("--backend", choices=("ble", "link"))
     ap.add_argument("--arm", action="store_true")
+    ap.add_argument("--calibrate", action="store_true", help="find the lens end stops at startup if the motor needs it (moves the lens)")
     ap.add_argument("--ue-host")
     ap.add_argument("--ue-port", type=int)
     ap.add_argument("--lead-ms", type=float, help="override bridge.latency_offset_ms")
@@ -312,6 +333,7 @@ def main(argv=None) -> None:
         cfg["unreal"]["port"] = a.ue_port
     bridge = Bridge(cfg, a.mode or cfg["bridge"]["mode"])
     bridge.run_for = a.run_for
+    bridge.calibrate_if_needed = a.calibrate
     bridge.log_path = a.log
     if a.no_input:
         bridge.input_loop = lambda: asyncio.sleep(10**9)

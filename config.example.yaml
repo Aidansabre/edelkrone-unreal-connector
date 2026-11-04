@@ -15,7 +15,7 @@ ble:
   lens_check_tolerance: 0.05  # motor cm vs lens map; larger relative mismatch blocks arming
 
 lens:
-  profile: lenses/lens-controller.json  # ble: made with `ek-ble map`; link: `ek-probe lens-map`
+  profile: lenses/lens-controller.json  # per lens: `ek-ble calibrate --lens X` + `ek-ble lens-map --lens X` (ble)
 
 unreal:
   host: 192.168.1.50          # Windows PC running Unreal (Remote Control WebSocket server)

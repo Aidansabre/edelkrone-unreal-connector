@@ -27,13 +27,23 @@ def _load_lens(cfg: dict) -> LensProfile | None:
     if not path:
         return None
     p = resolve_path(path)
-    return LensProfile.load(p) if p.exists() else None
+    if not p.exists():
+        return None
+    prof = LensProfile.load_or_new(p, p.stem)
+    if len(prof.points) < 2:
+        return None  # calibration facts only, no distance marks yet
+    prof.validate()
+    return prof
 
 
 class MotorBackend:
     name = "?"
     unit = "?"
     default_lead_s = 0.0
+    can_calibrate = False
+
+    async def calibrate(self, on_progress=None) -> None:
+        raise NotImplementedError("this backend can't calibrate from the bridge")
 
     def __init__(self, cfg: dict):
         self.cfg = cfg
@@ -116,11 +126,12 @@ class BleBackend(MotorBackend):
             st = await self.motor.read_status()
         if st is None:
             return "NO_STATUS"
-        if not st.lens_ends_known:
-            self.last_problem = "lens ends not known: calibrate in the edelkrone app, then quit the app"
+        if not st.lens_ends_known or not st.direction_known:
+            what = "lens ends not known" if not st.lens_ends_known else "focus direction not set"
+            self.last_problem = f"{what}: press c (or run `ek-ble calibrate`) - moves the lens end to end"
             return "NEEDS_CALIBRATION"
         if self.lens is None:
-            self.last_problem = "no lens map: run `ek-ble map` (needs lens learning in the edelkrone app)"
+            self.last_problem = "no lens map: run `ek-ble lens-map` (focus chart) and set lens.profile"
             return "NEEDS_LENS_MAP"
         # Lens sanity: the motor's own cm readout vs our map at the current position.
         m = self.motor.state
@@ -128,10 +139,23 @@ class BleBackend(MotorBackend):
             expected = self.lens.encoder_to_distance(m.position.percent, self.infinity_cm)
             if expected and abs(m.position.cm - expected) / expected > self.lens_check_tolerance:
                 self.last_problem = (f"lens map mismatch at {m.position.percent:.1f}%: motor says {m.position.cm:.1f} cm, "
-                                     f"map says {expected:.1f} cm - different lens? re-run `ek-ble map`")
+                                     f"map says {expected:.1f} cm - different lens? re-map with `ek-ble lens-map`")
                 return "LENS_MISMATCH"
         self.last_problem = ""
         return READY
+
+    can_calibrate = True
+
+    async def calibrate(self, on_progress=None) -> None:
+        """End stops (cmd 16) + direction (cmd 33) + slip check, using the configured lens profile."""
+        from ekble.calibration import calibrate
+
+        if not await self._ensure_connected():
+            raise ConnectionError(self.last_problem or "motor not connected")
+        self.streamer.armed = False
+        path = resolve_path(self.cfg["lens"]["profile"])
+        await calibrate(self.motor, path, ask=None, on_progress=on_progress, say=lambda s: log.info(s))
+        self.lens = _load_lens(self.cfg)  # direction/slip facts may have been added
 
     def tasks(self) -> list:
         return [self.streamer.run()]

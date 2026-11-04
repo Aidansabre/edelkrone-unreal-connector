@@ -64,6 +64,32 @@ def cmd_abort() -> bytes:
     return _build(_LIB.motion_abort)
 
 
+def frame(cmd: int, payload: bytes | list[int] = b"") -> bytes:
+    """Generic frame: [len, cmd, payload..., sum16_BE(first len bytes)] with len = 2 + len(payload)."""
+    body = [2 + len(payload), cmd, *payload]
+    s = sum(body) & 0xFFFF
+    return bytes(body + [s >> 8, s & 0xFF])
+
+
+# Commands missing from the new SDK's tables, decoded from the 2022 edelkrone SDK's libFocusPlus
+# (x86_64, symbols intact; see docs/edelkrone-api.md "Commands decoded from the 2022 SDK").
+CMD_SIMPLE_LENS_CALIBRATION = 16   # libFocusPlus_simpleLensCalibration: find both lens end stops
+CMD_FOCUS_DIRECTION = 33           # libFocusPlus_focusDirectionCalibration(u8): which end is 0 %
+# Measured on the real motor: arg 0 -> 0 % at the low-encoder end, arg 1 -> 0 % at the high-encoder end.
+DIRECTION_ZERO_AT_LOW_ENCODER = 0
+DIRECTION_ZERO_AT_HIGH_ENCODER = 1
+
+
+def cmd_calibrate_lens_ends() -> bytes:
+    """What the 2022 SDK sends for `calibrate` on a FocusPLUS PRO: 02 10 00 12."""
+    return frame(CMD_SIMPLE_LENS_CALIBRATION)
+
+
+def cmd_focus_direction(arg: int) -> bytes:
+    """Sets which lens end is 0 % (no motion). The edelkrone app's "macro or infinity?" step."""
+    return frame(CMD_FOCUS_DIRECTION, [int(arg) & 0xFF])
+
+
 def _enum_name(enum_cls, value: int) -> str:
     for e in enum_cls:
         if e.value == value:
@@ -86,6 +112,7 @@ class Status:
     configuration: str = "UNKNOWN"
     battery: float | None = None
     lens_ends_known: bool = False      # simple focus calibration (lens end stops) done
+    direction_known: bool = False      # focus direction calibration (which end is 0 %) done
     lens_learned: bool = False         # distances learned in the edelkrone app -> cm readout valid
     motor_referenced: bool = False     # brushless calibration done
     zoom_mode: bool = False
@@ -118,6 +145,7 @@ def decode(data: bytes) -> tuple[str, object | None]:
                 state=_enum_name(LibFocusPlusState, v[1]),
                 battery=float(v[2]),
                 lens_ends_known=bool(flags & 0x01),
+                direction_known=bool(flags & 0x08),
                 lens_learned=bool(flags & 0x04),
                 motor_referenced=bool(flags & 0x10),
                 zoom_mode=bool(flags & 0x20),

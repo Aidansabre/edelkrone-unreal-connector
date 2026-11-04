@@ -68,7 +68,7 @@ async def test_motor_reads():
     p = await m.read_position()
     assert p.percent == pytest.approx(25) and m.state.cm == pytest.approx(pct_to_cm(25), rel=1e-3)
     assert (await m.read_version()).fw == "0.30"
-    assert await m.read_encoder() == 10000
+    assert await m.read_encoder() == int(-111000 + 0.75 * 111000)  # 0 % = macro = high-encoder end
 
 
 async def test_sweep_builds_map():
@@ -211,5 +211,162 @@ async def test_backend_ready(tmp_path):
         b = await _bridge(tmp_path, ue, FakeMotorDevice(pct=30), "ue_drives")
         await b.backend.setup()
         assert await b.backend.check() == READY
+    finally:
+        await ue.stop()
+
+
+# ---------------------------------------------------------------- calibration + mapping without the edelkrone app
+from ekble.lensmap_wizard import LensMapWizard, parse_distance, profile_ready  # noqa: E402
+from eklink.lens import INF, LensProfile  # noqa: E402
+
+
+def test_calibration_frame_matches_2022_sdk():
+    assert P.cmd_calibrate_lens_ends().hex(" ") == "02 10 00 12"  # libFocusPlus_simpleLensCalibration
+    assert P.frame(17) == P.cmd_status()
+
+
+async def test_calibrate_lens_ends():
+    dev = FakeMotorDevice(lens_ends_known=False, lens_learned=False, pct=40, direction_known=False)
+    m = await _motor(dev)
+    states = []
+    st = await m.calibrate_lens_ends(timeout=5, on_progress=lambda t, s: states.append(s.state))
+    assert st.lens_ends_known and "LENS_CALIBRATING" in states
+    assert (await m.read_position()).percent == 0.0
+    assert dev.commands[0][0] == 16
+
+
+def test_parse_distance():
+    assert parse_distance("1.2") == 1.2
+    assert parse_distance("120cm") == pytest.approx(1.2)
+    assert parse_distance("4 ft") == pytest.approx(1.2192)
+    assert parse_distance("inf") == INF
+    with pytest.raises(ValueError):
+        parse_distance("near")
+
+
+async def test_lens_map_wizard(tmp_path):
+    dev = FakeMotorDevice(pct=0, speed_pct_s=1000, lens_learned=False)
+    m = await _motor(dev)
+    prof = LensProfile("w")
+    wiz = LensMapWizard(m, prof, fine=0.5, coarse=5)
+    assert "position: 0.0%" in await wiz.start()
+    msgs = []
+    for line in ["m 60cm", "g 30", "+", "++", "m 1", "+10", "-0.5", "m 2.5m", "g 100", "m inf", "l", "d 1", "g 35.5", "m 1"]:
+        msg, quit_ = await wiz.handle(line)
+        msgs.append(msg)
+        assert not quit_
+    assert dev.pct == pytest.approx(35.5, abs=0.05)
+    marks = {p.distance_m: round(p.encoder, 1) for p in prof.points}
+    assert marks == {0.6: 0.0, 1.0: 35.5, 2.5: 45.0, INF: 100.0}
+    assert "inf" in msgs[10] and "100.00%" in msgs[10]
+    ok, note = profile_ready(prof)
+    assert ok and note == ""
+    prof.save(tmp_path / "w.json")
+    # the saved map drives the bridge's cm -> % conversion
+    loaded = LensProfile.load(tmp_path / "w.json")
+    assert loaded.distance_to_encoder(100) == pytest.approx(35.5)
+    assert loaded.distance_to_encoder(1e7) == pytest.approx(100, abs=0.01)
+    assert (await wiz.handle("q"))[1]
+
+
+async def test_lens_map_wizard_requires_calibration():
+    m = await _motor(FakeMotorDevice(lens_ends_known=False))
+    with pytest.raises(RuntimeError):
+        await LensMapWizard(m, LensProfile("x")).start()
+
+
+async def test_bridge_calibrates_on_startup(tmp_path):
+    ue = await FakeUE().start()
+    dev = FakeMotorDevice(lens_ends_known=False, lens_learned=False, pct=50, speed_pct_s=300)
+    ue.focus_cm = pct_to_cm(40)
+    try:
+        b = await _bridge(tmp_path, ue, dev, "ue_drives")
+        prof = LensProfile.load(tmp_path / "lens.json")
+        prof.macro_encoder = "high"
+        prof.save(tmp_path / "lens.json")
+        b.calibrate_if_needed = True
+        await _run(b, 3.0)
+        assert dev.commands and any(c == 16 for c, _ in dev.commands)
+        assert dev.lens_ends_known
+        assert dev.moves and dev.pct == pytest.approx(40, abs=0.6)  # armed after calibrating and followed UE
+    finally:
+        await ue.stop()
+
+
+# ---------------------------------------------------------------- focus direction (0 % = closest focus) + slip check
+from ekble.calibration import SlipSuspected, calibrate  # noqa: E402
+
+
+def test_direction_frames():
+    assert P.cmd_focus_direction(0).hex(" ") == "03 21 00 00 24"  # sent to the real motor
+    assert P.cmd_focus_direction(1).hex(" ") == "03 21 01 00 25"
+
+
+@pytest.mark.parametrize("macro_high,cal_zero_at_high", [(True, False), (True, True), (False, False), (False, True)])
+async def test_calibrate_first_time_asks_then_remembers(tmp_path, macro_high, cal_zero_at_high):
+    dev = FakeMotorDevice(lens_ends_known=False, pct=50, speed_pct_s=2000,
+                          macro_high=macro_high, cal_zero_at_high=cal_zero_at_high)
+    m = await _motor(dev)
+    lens = tmp_path / "lenses" / "my-lens.json"
+    questions = []
+
+    async def ask(q):
+        questions.append(q)
+        return "macro" if dev.at_macro() else "infinity"  # what the user sees
+
+    res = await calibrate(m, lens, ask=ask, say=lambda s: None)
+    assert len(questions) == 1
+    assert res["macro_encoder"] == ("high" if macro_high else "low")
+    assert dev.direction_known and dev.zero_at_high == macro_high  # 0 % is now the macro end
+    saved = LensProfile.load_or_new(lens, "x")
+    assert saved.name == "my-lens" and saved.macro_encoder == res["macro_encoder"]
+    assert saved.probe_enc_span == pytest.approx(0.25 * dev.travel_enc, rel=0.01)
+    await m.move_percent(0)
+    await m.wait_settled(0, timeout=3)
+    assert dev.at_macro()
+
+    # power cycle: firmware forgets; second calibration needs no question and passes the slip check
+    dev.lens_ends_known = dev.direction_known = False
+    dev.zero_at_high = not macro_high
+    res2 = await calibrate(m, lens, ask=None, say=lambda s: None)
+    assert len(questions) == 1 and dev.zero_at_high == macro_high and dev.direction_known
+    assert res2["span_deviation"] == pytest.approx(0, abs=0.01)
+
+
+async def test_calibrate_detects_slip(tmp_path):
+    dev = FakeMotorDevice(lens_ends_known=False, speed_pct_s=2000)
+    m = await _motor(dev)
+    lens = tmp_path / "l.json"
+    prof = LensProfile("l")
+    prof.macro_encoder = "high"
+    prof.probe_enc_span = 0.25 * dev.travel_enc
+    prof.save(lens, require_points=False)
+    dev.travel_enc = int(dev.travel_enc * 2.3)  # gear slipped during the sweep: ends found too far apart
+    with pytest.raises(SlipSuspected):
+        await calibrate(m, lens, say=lambda s: None)
+    res = await calibrate(m, lens, accept_span=True, say=lambda s: None)  # deliberate remount
+    assert LensProfile.load_or_new(lens, "l").probe_enc_span == pytest.approx(res["probe_span"])
+
+
+async def test_calibrate_keeps_marks(tmp_path):
+    lens = tmp_path / "l.json"
+    prof = build_profile("l", [(p, pct_to_cm(p)) for p in range(0, 101, 5)])
+    prof.save(lens)
+    m = await _motor(FakeMotorDevice(lens_ends_known=False, speed_pct_s=2000))
+    with pytest.raises(RuntimeError):  # no direction known yet and nobody to ask
+        await calibrate(m, lens, ask=None, say=lambda s: None)
+    async def ask(q):
+        return "i"
+    await calibrate(m, lens, ask=ask, say=lambda s: None)
+    assert len(LensProfile.load(lens).points) == len(prof.points)
+
+
+async def test_bridge_needs_calibration_when_direction_unknown(tmp_path):
+    ue = await FakeUE().start()
+    dev = FakeMotorDevice(direction_known=False)
+    try:
+        b = await _bridge(tmp_path, ue, dev, "ue_drives")
+        await _run(b, 1.0)
+        assert b.state == "NEEDS_CALIBRATION" and not dev.moves
     finally:
         await ue.stop()
