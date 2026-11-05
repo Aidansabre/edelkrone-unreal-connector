@@ -1,4 +1,16 @@
-# edelkrone side: findings
+# Research log
+
+This is the chronological lab notebook of how the edelkrone side was worked out, kept because it records **dead ends and why** (Link Adapter, SDK versions, slips) along with the raw numbers. It is not a manual. For the current, consolidated information see:
+- [overview.md](overview.md): what the system is and why
+- [user-guide.md](user-guide.md): how to use it
+- [focusplus-protocol.md](focusplus-protocol.md): protocol reference
+- [performance.md](performance.md): measurements
+
+Some instructions in early entries are superseded by later ones; for example, "calibrate in the edelkrone app" is replaced by `ek-ble calibrate`.
+
+---
+
+## Phase 1: edelkrone side, findings (Link Adapter and 2022 SDK)
 
 ## Hardware on this Mac
 | | |

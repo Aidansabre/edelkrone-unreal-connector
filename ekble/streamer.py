@@ -1,6 +1,6 @@
 """Stream move-to-percent targets to a BleFocusMotor at the best rate the link allows.
 
-Measured on the real motor (docs/edelkrone-api.md):
+Measured on the real motor (docs/performance.md):
   - each write takes ~70 ms (with response) -> ~12-14 commands/s in total
   - the motor lags ~270 ms behind a streamed target (compensate upstream with a lead)
   - top speed ~60 %/s of lens travel

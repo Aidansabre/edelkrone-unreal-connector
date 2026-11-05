@@ -1,77 +1,59 @@
 # Edelkrone ⇄ Unreal focus connector
 
-Middleware on this Mac that makes an Unreal Engine CineCamera's focus distance drive an edelkrone
-**FocusPLUS PRO** (labelled "Lens Controller") directly over **Bluetooth**, and reports the
-lens position back to Unreal.
+Drive a real lens from an **Unreal Engine CineCamera's focus distance**. An edelkrone **FocusPLUS PRO** ("Lens Controller") turns the lens, controlled directly over **Bluetooth** from a Mac, with the lens position reported back to Unreal. No edelkrone app, Link Adapter or Unreal plugin is needed.
 
 ```
-UE (Windows) ──Remote Control WS :30020──▶ ek-bridge (Mac) ──Bluetooth LE──▶ FocusPLUS PRO
- CurrentFocusDistance (polled 60 Hz)   cm → lens map → % → +270 ms lead → move-to-percent (~12/s)
- BP_EdelkroneFeedback  ◀────────────  motor % / cm (the motor's own learned distance)
+Unreal (Windows) ──Remote Control WebSocket──▶ ek-bridge (Mac) ──Bluetooth LE──▶ FocusPLUS PRO ──▶ lens
+ CurrentFocusDistance, 60 Hz          cm → lens map → % → 270 ms lead → move-to-percent (~12/s)
+ BP_EdelkroneFeedback ◀────────────── lens position
 ```
-The legacy path through the edelkrone Link Adapter and the 2022 edelkrone SDK is still there
-as `motor.backend: link`. It can't see this motor without updates edelkrone no longer ships.
 
-## Setup
+**Status (2026-11-05):**
+- **Motor side: complete and verified on hardware.** Calibration and lens mapping work without the app. The motor follows a streamed pull with ~2 % of lens travel average error on fast moves and ≤ 0.1 % at rest. There is a web UI for everything.
+- **Unreal side:** built and tested against a simulator; validation against real Unreal is next ([docs/unreal-setup.md](docs/unreal-setup.md)).
+
+## Quick start
+
 ```bash
 /opt/homebrew/bin/python3.13 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
-cp config.example.yaml config.yaml      # set ble.address and unreal.host
+cp config.example.yaml config.yaml
 ```
-On macOS, Bluetooth only works from **Terminal.app**, which needs Bluetooth permission.
-`scripts/terminal.sh <name> <command…>` runs any command there.
 
-## Web UI (the easy way)
-Double-click **`Run Bridge.command`**. It starts the bridge in Terminal and opens **http://127.0.0.1:8766**,
-where everything below can be done with buttons:
+1. Quit the edelkrone app everywhere; the motor takes one Bluetooth connection.
+2. Double-click **`Run Bridge.command`**. The bridge starts in Terminal (it needs Terminal's Bluetooth permission) and opens **http://127.0.0.1:8766**.
+3. In the web UI:
+   - **Create** a lens.
+   - **Calibrate**, and answer "closest focus or infinity?" once per lens.
+   - **Map** a few distances with a focus target, including **infinity**. Save.
+4. Set the Unreal host (web UI → Unreal), then **ARM**.
 
-| Area | What you can do |
+**No hardware?**
+
+```bash
+.venv/bin/python -m tools.sim_ue --port 30021
+```
+
+```bash
+.venv/bin/ek-bridge --simulate --ue-port 30021 --open
+```
+
+## Documentation
+
+| | |
 |---|---|
-| **Status bar** | Motor (battery, firmware, ms per command), Unreal link, active lens, bridge state |
-| **Live** | ARM/DISARM (`space`), Stop, Unreal → lens / lens → Unreal. Unreal distance → command → lens position, with a 15 s chart |
-| **Setup** | Checklist (motor · lens · calibration · map). Pick or create a lens. **Calibrate**: the closest-focus/infinity question appears as a dialog; a slip offers "accept new mount" |
-| **Distance map** | Jog (−5 … +5 %, or `←`/`→` with `shift`), slider, go to %. Type a distance and **Mark** (or **Mark infinity**). Marks table with go/delete, map plot, Save |
-| **Unreal / Motion settings** | Host/port/passphrase, find cameras, feedback, lead, speed limit. They apply live; **Save as startup default** writes `config.yaml` |
-
-- **Try it without hardware:** `ek-bridge --simulate --open`. The simulated motor uses its own lens folder (`lenses/sim/`), so real profiles are never touched. Add `python -m tools.sim_ue --port 30021` and `--ue-port 30021` for a fake Unreal pull.
-- **Network access:** the UI binds to loopback. Opening it to other machines (`--web-bind 0.0.0.0`) has no authentication, and it moves a lens.
-- **Single connection:** the motor accepts one Bluetooth connection, so while the bridge runs, use the web UI rather than `ek-ble`.
-
-## Workflow (command line)
-No edelkrone app needed. Keep the app closed: the motor allows one Bluetooth connection at a time.
-1. **Mount the motor firmly** on the lens. A loose gear slips at the end stops; the calibration detects that and rejects it.
-2. **Calibrate:** `ek-ble calibrate --lens NAME`, after every motor power-on (or let the bridge do it: `ek-bridge --calibrate`, or key `c`).
-   - Drives to both end stops (~10–15 s), then sets 0 % = closest focus and checks for gear slip.
-   - The first time for a lens, it asks whether the lens is at closest focus or infinity and remembers the answer in `lenses/NAME.json`.
-3. **Map, once per lens:** run `ek-ble lens-map --lens NAME` with a focus target at measured distances.
-   Focus with `+`/`-`/`++`/`--`/`g 42`, then mark with `m 1.2` (or `m 120cm`, `m 4ft`, `m inf`). Save with `s`.
-   - Mark closest focus, **infinity where far objects are sharp** (the end stop is often beyond it), and 5–10 distances in between.
-   - The map is stored as % of lens travel, so it survives power cycles. The bridge never drives past the outermost marks.
-   - Set `lens.profile` in `config.yaml` to `lenses/NAME.json`.
-4. **Try it without Unreal (optional):**
-   - `python -m tools.sim_ue --port 30021` plays a fake focus pull.
-   - `ek-bridge --arm --ue-port 30021 --log logs/run.csv` follows it.
-5. **Set up Unreal:** see [docs/unreal-setup.md](docs/unreal-setup.md). Check the link with `ue-probe read`.
-6. **Run:** `ek-bridge` (or `ek-bridge --lens NAME`). Keys (type + Enter): `a` arm/disarm, `c` calibrate,
-   `m` switch `ue_drives`/`wheel_drives`, `s` stats, `q` quit.
-
-## Changing lenses
-All in Terminal. `ek-ble lenses` shows which profiles exist and whether they are calibrated and mapped.
-
-| Situation | Steps |
-|---|---|
-| **New lens** | 1. Mount the motor firmly. 2. `ek-ble calibrate --lens NAME` (asks closest focus or infinity once). 3. `ek-ble lens-map --lens NAME`. 4. `ek-bridge --lens NAME` |
-| **Known lens** | 1. Mount the motor firmly. 2. `ek-bridge --lens NAME --calibrate` (no questions; the slip check validates the mount) |
-| **Motor mounted on the other side of the lens** | `ek-ble calibrate --lens NAME --ask` (or `--confirm` to check visually), plus `--accept-span` if the slip check complains |
-| **Every motor power-on** | Calibrate again (`ek-bridge --calibrate` does it when needed) |
-
-- **Zoom lenses:** the focus scale can shift with focal length, so map at the focal length you shoot, or keep one profile per focal length (e.g. `zoom-24`, `zoom-70`).
-
-## Measured performance (details in [docs/edelkrone-api.md](docs/edelkrone-api.md))
-- **Bluetooth:** ~70 ms per command, so about 12–14 commands per second.
-- **Motor:** ~270 ms lag behind a streamed target (the bridge leads by 270 ms); top speed about 60 % of lens travel per second.
-- **Following a 3 s 80 ↔ 250 cm pull:** about 2 % of travel average error.
-- **Static positioning:** ≤ 0.1 %.
+| [Overview](docs/overview.md) | Architecture, key decisions, safety model, status |
+| [User guide](docs/user-guide.md) | Setup, web UI, calibration, lens mapping, changing lenses, running, config, troubleshooting |
+| [Unreal setup](docs/unreal-setup.md) | Remote Control API, firewall, camera, feedback actor |
+| [FocusPLUS PRO protocol](docs/focusplus-protocol.md) | Bluetooth GATT, frames, commands, replies |
+| [Performance](docs/performance.md) | Measured latency, speed, accuracy |
+| [Development](docs/development.md) | Code layout, runtime architecture, web API, tests, tools |
+| [Research log](docs/research-log.md) | How it was worked out, including the Link Adapter dead end |
 
 ## Tests
-`.venv/bin/pytest`: 48 tests, run offline against a simulated motor (real frames), a fake SDK and a fake Remote Control server.
+
+```bash
+.venv/bin/pytest
+```
+
+48 tests, all offline: a simulated motor speaking the real frames, a fake Unreal Remote Control server and a fake edelkrone SDK.

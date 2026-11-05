@@ -3,7 +3,7 @@
 The edelkrone SDK (/Applications/edelkrone SDK.app) runs a background server that
 translates HTTP JSON commands to the edelkrone Link Adapter over USB serial.
 
-Endpoints (see docs/edelkrone-api.md):
+Endpoints (see docs/research-log.md, phase 1):
   POST /v1/device              {"command": "linkStatus", ...}
   POST /v1/link/{linkID}       pairing / link-level commands
   POST /v1/bundle/{linkID}     motion commands for the paired bundle

@@ -72,7 +72,7 @@ def frame(cmd: int, payload: bytes | list[int] = b"") -> bytes:
 
 
 # Commands missing from the new SDK's tables, decoded from the 2022 edelkrone SDK's libFocusPlus
-# (x86_64, symbols intact; see docs/edelkrone-api.md "Commands decoded from the 2022 SDK").
+# (x86_64, symbols intact; see docs/focusplus-protocol.md).
 CMD_SIMPLE_LENS_CALIBRATION = 16   # libFocusPlus_simpleLensCalibration: find both lens end stops
 CMD_FOCUS_DIRECTION = 33           # libFocusPlus_focusDirectionCalibration(u8): which end is 0 %
 # Measured on the real motor: arg 0 -> 0 % at the low-encoder end, arg 1 -> 0 % at the high-encoder end.

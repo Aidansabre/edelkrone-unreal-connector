@@ -1,6 +1,15 @@
 # Unreal setup (Windows PC)
 
-The bridge on the Mac connects **out** to Unreal's Remote Control WebSocket server. Nothing needs to be built in UE.
+> **Status: not yet validated against a real Unreal Engine.** Everything here is implemented and tested against `tools/sim_ue.py` (a stand-in Remote Control server), but the Unreal-side behaviour is assumptions until the checklist at the bottom is done. That is the next milestone.
+
+The bridge on the Mac connects **out** to Unreal's Remote Control WebSocket server. Nothing needs to be built in Unreal; no plugin of ours is involved.
+
+**How the bridge uses Remote Control:**
+- **Transport:** one WebSocket (`ws://<PC>:30020`). HTTP routes are tunnelled over it (`{"MessageName": "http", …}`), with request ids matched to replies (FIFO fallback).
+- **Reading focus:** it polls `PUT /remote/object/property` with `READ_ACCESS` on the camera's `CurrentFocusDistance` at 60 Hz.
+- **Finding the camera:** it calls `EditorActorSubsystem.GetAllLevelActors` via `/remote/object/call` and picks CineCameraActors, then uses `<actor>.CameraComponent`. During Play-In-Editor it follows the `UEDPIE_0_` copy.
+- **Lens → Unreal mode:** it writes `FocusSettings.ManualFocusDistance` (`WRITE_ACCESS`, no undo transaction).
+- **Feedback:** it writes `MotorFocusDistanceCm`, `MotorEncoder` and `BridgeState` on `BP_EdelkroneFeedback`.
 
 ## One-time project setup
 1. **Plugins:** enable **Remote Control API** (and optionally *Remote Control Web Interface*). Restart the editor.
