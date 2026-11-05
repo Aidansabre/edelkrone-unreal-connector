@@ -45,7 +45,7 @@ DEFAULTS: dict[str, Any] = {
         "infinity_cm": 100000,
         "feedback": {"enabled": True, "actor_path": None, "rate_hz": 10},
     },
-    "bridge": {"mode": "ue_drives", "latency_offset_ms": None, "lead_smoothing_s": 0.15, "ue_timeout_s": 1.0},
+    "bridge": {"mode": "both", "latency_offset_ms": None, "lead_smoothing_s": 0.15, "ue_timeout_s": 1.0},
 }
 
 

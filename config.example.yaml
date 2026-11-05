@@ -31,7 +31,7 @@ unreal:
     rate_hz: 10
 
 bridge:
-  mode: ue_drives             # ue_drives | wheel_drives
+  mode: both                  # both (default: Unreal leads, a hand on the lens takes over) | ue_drives | wheel_drives
   latency_offset_ms: null     # lead to hide motor lag; null = backend default (ble 270 ms, link 0)
   lead_smoothing_s: 0.15      # velocity smoothing for the lead predictor
   ue_timeout_s: 1.0           # stop streaming if no UE value arrives for this long

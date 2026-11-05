@@ -78,6 +78,13 @@
   .modal { background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; padding: 22px; max-width: 460px; }
   .modal p { margin: 0 0 16px; font-size: 16px; }
   .disabled-box { opacity: .5; pointer-events: none; }
+  .tip { position: fixed; z-index: 20; max-width: 340px; background: #0b0d11; color: var(--text);
+         border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px;
+         padding: 8px 10px; font-size: 12.5px; line-height: 1.45; box-shadow: 0 6px 20px rgba(0,0,0,.5);
+         pointer-events: none; opacity: 0; transition: opacity .12s; }
+  .tip.on { opacity: 1; }
+  button.off { opacity: .45; cursor: default; }
+  button.primary.off:hover { background: var(--accent); }
   kbd { background: #2a2f38; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 12px; }
 </style>
 </head>
@@ -86,12 +93,12 @@
 <div class="panel">
   <div class="row" style="justify-content:space-between">
     <h1>Edelkrone Focus Bridge</h1>
-    <span id="statepill" class="pill">…</span>
+    <span id="statepill" class="pill" data-tip="Bridge state. READY: can arm. ARMED: following. NEEDS CALIBRATION: find the end stops first. NEEDS LENS MAP: mark distances. LENS MISMATCH: the lens doesn't match its map (different lens?). NOT CONNECTED: no Bluetooth link to the motor.">…</span>
   </div>
   <div class="status">
-    <span><span id="mdot" class="dot"></span><span id="mtext">motor</span></span>
-    <span><span id="udot" class="dot"></span><span id="utext">Unreal</span></span>
-    <span>lens <b id="lensname" style="color:var(--text)">–</b></span>
+    <span data-tip="Bluetooth link to the FocusPLUS PRO: firmware, battery and how long one command takes (~70 ms is normal). Red: not connected. Is the motor on, and is the edelkrone app closed? The motor accepts one connection."><span id="mdot" class="dot"></span><span id="mtext">motor</span></span>
+    <span data-tip="Remote Control connection to Unreal, and how long one focus read takes there and back (~20 ms on a LAN). Yellow: connected but no value from the camera. Red: not connected (host, port, firewall, plugin)."><span id="udot" class="dot"></span><span id="utext">Unreal</span></span>
+    <span data-tip="The active lens profile (lenses/&lt;name&gt;.json): its end stops, direction, slip reference and distance map.">lens <b id="lensname" style="color:var(--text)">–</b></span>
   </div>
   <div class="err" id="problem"></div>
   <div class="err" id="error"></div>
@@ -99,24 +106,24 @@
 
 <div class="panel">
   <div class="row">
-    <button id="arm" class="big primary">ARM</button>
-    <button id="stop" class="danger">Stop</button>
+    <button id="arm" class="big primary" data-tip="Start following (space bar). While armed the lens moves by itself. Possible once the motor is calibrated, the lens is mapped and Unreal sends a value; otherwise the reason shows below. DISARM stops sending targets.">ARM</button>
+    <button id="stop" class="danger" data-tip="Disarm and stop the motor immediately.">Stop</button>
     <div class="seg" id="modeseg">
-      <button data-mode="ue_drives">Unreal → lens</button>
-      <button data-mode="wheel_drives">Lens → Unreal</button>
-      <button data-mode="both" title="Unreal drives the lens; turning the lens by hand takes over until Unreal's focus changes">Both ways</button>
+      <button data-mode="both" data-tip="Default. Unreal drives the lens until you turn the lens by hand. Then the lens leads and Unreal's Manual Focus Distance follows it. Unreal takes over again as soon as its focus is changed there (Details panel, Sequencer) or with 'Give focus back to Unreal'. The lens can only lead with the camera's focus method on Manual.">Both ways</button>
+      <button data-mode="ue_drives" data-tip="Unreal drives the lens: the focus Unreal renders (Sequencer, Details panel, Tracking). If the lens is turned by hand, it goes back to Unreal's focus when you let go.">Unreal → lens</button>
+      <button data-mode="wheel_drives" data-tip="The lens drives Unreal: its position is written into the camera's Manual Focus Distance, and the motor is never driven. Needs focus method Manual and no Sequencer focus track playing.">Lens → Unreal</button>
     </div>
-    <span id="leader" class="pill" style="display:none"></span>
-    <button id="giveback" style="display:none">Give focus back to Unreal</button>
+    <span id="leader" class="pill" style="display:none" data-tip="Who drives the focus right now (Both ways). Unreal leads: the lens follows Unreal. Lens leads: you turned the lens, and Unreal follows it."></span>
+    <button id="giveback" style="display:none" data-tip="Let Unreal drive again. The lens moves to Unreal's current focus.">Give focus back to Unreal</button>
     <span class="hint" style="margin:0"><kbd>space</kbd> arm/disarm</span>
   </div>
   <div class="hint" id="whynot"></div>
   <div class="grid3" style="margin-top:12px">
-    <div class="stat"><div class="cap">Unreal focus</div><div class="big-num" id="ue_cm">–</div><div class="hint" style="margin:0" id="ue_pct"></div></div>
-    <div class="stat"><div class="cap">Command</div><div class="big-num" id="target">–</div><div class="hint" style="margin:0" id="lead"></div></div>
-    <div class="stat"><div class="cap">Lens</div><div class="big-num" id="motor">–</div><div class="hint" style="margin:0" id="motor_cm"></div></div>
+    <div class="stat" data-tip="The focus distance Unreal renders (the CineCamera's Current Focus Distance, including Unreal's focus smoothing), and where that is on this lens in % of travel, from the distance map."><div class="cap">Unreal focus</div><div class="big-num" id="ue_cm">–</div><div class="hint" style="margin:0" id="ue_pct"></div></div>
+    <div class="stat" data-tip="The target sent to the motor: Unreal's value pushed ahead by the lead to hide the motor's ~270 ms lag, and limited to the max speed. '–' when not armed or while the lens leads."><div class="cap">Command</div><div class="big-num" id="target">–</div><div class="hint" style="margin:0" id="lead"></div></div>
+    <div class="stat" data-tip="Where the lens actually is, as the motor reports it: % of travel (0 % = closest focus) and the distance that is on the map."><div class="cap">Lens</div><div class="big-num" id="motor">–</div><div class="hint" style="margin:0" id="motor_cm"></div></div>
   </div>
-  <canvas id="chart" height="170" style="margin-top:12px"></canvas>
+  <canvas id="chart" height="170" style="margin-top:12px" data-tip="The last 15 s in % of lens travel. Purple: Unreal (mapped to this lens). Blue: command sent (with lead). Green: lens position. Green on top of purple means the real lens matches Unreal."></canvas>
   <div class="legend"><span><i style="background:var(--ue)"></i>Unreal (mapped)</span>
     <span><i style="background:var(--accent)"></i>command (with lead)</span>
     <span><i style="background:var(--ok)"></i>lens position</span><span>last 15 s, % of lens travel</span></div>
@@ -125,21 +132,21 @@
 <div class="panel">
   <h2>Setup</h2>
   <div class="steps">
-    <div class="step" id="st_motor"><b>Motor</b><span>–</span></div>
-    <div class="step" id="st_lens"><b>Lens profile</b><span>–</span></div>
-    <div class="step" id="st_cal"><b>Calibration</b><span>–</span></div>
-    <div class="step" id="st_map"><b>Distance map</b><span>–</span></div>
+    <div class="step" id="st_motor" data-tip="Bluetooth connection to the motor."><b>Motor</b><span>–</span></div>
+    <div class="step" id="st_lens" data-tip="A lens profile must be selected or created below."><b>Lens profile</b><span>–</span></div>
+    <div class="step" id="st_cal" data-tip="The motor knows this lens's end stops and which end is closest focus. Lost at every motor power-off."><b>Calibration</b><span>–</span></div>
+    <div class="step" id="st_map" data-tip="At least 2 marks (better 5–10 plus infinity) to convert distances into lens positions."><b>Distance map</b><span>–</span></div>
   </div>
   <div class="grid2">
     <div>
       <h2>Lens</h2>
       <div class="row">
-        <select id="lenssel" style="flex:1;min-width:0"></select>
-        <button id="uselens">Use</button>
+        <select id="lenssel" style="flex:1;min-width:0" data-tip="Saved lens profiles, and whether each is calibrated and mapped."></select>
+        <button id="uselens" data-tip="Switch to the selected lens. Calibrate afterwards: the end stops differ per lens.">Use</button>
       </div>
       <div class="row">
-        <input type="text" id="newlens" placeholder="new lens name, e.g. sigma-24-70" style="flex:1;min-width:0">
-        <button id="createlens">Create</button>
+        <input type="text" id="newlens" data-tip="Name for a new lens profile, e.g. sigma-24-70." placeholder="new lens name, e.g. sigma-24-70" style="flex:1;min-width:0">
+        <button id="createlens" data-tip="Create and select a new, empty lens profile. Then calibrate and map it.">Create</button>
       </div>
       <div class="hint">Each lens has its own end-stop direction, slip reference and distance map.
         After changing lenses: mount the motor firmly, select the lens, Calibrate.</div>
@@ -147,11 +154,11 @@
     <div>
       <h2>Calibration</h2>
       <div class="row">
-        <button id="calibrate" class="primary">Calibrate</button>
-        <label style="font-size:13px;color:var(--dim)"><input type="checkbox" id="askdir"> ask which end is closest focus</label>
+        <button id="calibrate" class="primary" data-tip="Drives the lens to both end stops (~10–15 s), sets 0 % = closest focus and checks the gear for slip against this lens's reference. Needed after every motor power-on and lens change. Disarm first.">Calibrate</button>
+        <label style="font-size:13px;color:var(--dim)" data-tip="On: at the end stop you confirm whether the lens is at closest focus or infinity, every time. Off: the answer stored for this lens is reused, and you're only asked the first time."><input type="checkbox" id="askdir" checked> ask which end is closest focus</label>
       </div>
       <div class="row" id="sliprow" style="display:none">
-        <button id="acceptspan" class="danger">Accept new mount &amp; recalibrate</button>
+        <button id="acceptspan" class="danger" data-tip="Only if you remounted the motor on purpose: the encoder span changed, so store it as this lens's new slip reference and calibrate again.">Accept new mount &amp; recalibrate</button>
       </div>
       <div class="hint" id="calinfo">Drives the lens to both end stops (~10–15 s), sets 0 % = closest focus
         and checks the gear for slip. Needed after every motor power-on and every lens change.</div>
@@ -164,37 +171,37 @@
   <div class="grid2">
     <div>
       <div class="row">
-        <div class="stat" style="flex:1"><div class="cap">Position</div>
+        <div class="stat" style="flex:1" data-tip="Current lens position (% of travel, 0 % = closest focus) and the distance the map gives for it."><div class="cap">Position</div>
           <div class="big-num" id="mpos">–</div><div class="hint" style="margin:0" id="mposcm"></div></div>
       </div>
-      <div class="row">
+      <div class="row" data-tip="Move the lens by this many % of travel. Keyboard: ← → 0.2 %, with shift 2 %.">
         <button class="jog" data-d="-5">−5</button><button class="jog" data-d="-1">−1</button>
         <button class="jog" data-d="-0.2">−0.2</button><button class="jog" data-d="0.2">+0.2</button>
         <button class="jog" data-d="1">+1</button><button class="jog" data-d="5">+5</button>
         <span class="hint" style="margin:0"><kbd>←</kbd><kbd>→</kbd> 0.2 · <kbd>shift</kbd> 2</span>
       </div>
       <div class="row">
-        <input type="range" id="slider" min="0" max="100" step="0.1">
-        <input type="number" id="gotopct" min="0" max="100" step="0.1" placeholder="%">
-        <button id="goto">Go</button>
+        <input type="range" id="slider" min="0" max="100" step="0.1" data-tip="Drag to move the lens to a position (% of travel).">
+        <input type="number" id="gotopct" min="0" max="100" step="0.1" placeholder="%" data-tip="Exact position to move to, in % of travel.">
+        <button id="goto" data-tip="Move the lens to the position typed on the left.">Go</button>
       </div>
       <div class="row">
-        <input type="text" id="markdist" placeholder="distance: 1.5 · 120cm · 4ft" style="flex:1;min-width:0">
-        <button id="mark" class="primary">Mark</button>
-        <button id="markinf">Mark infinity</button>
+        <input type="text" id="markdist" data-tip="Distance of the target you are focused on: 1.5 (metres), 120cm, 4ft or inf." placeholder="distance: 1.5 · 120cm · 4ft" style="flex:1;min-width:0">
+        <button id="mark" class="primary" data-tip="Store the current lens position for this distance (Enter works too).">Mark</button>
+        <button id="markinf" data-tip="Store the current position as infinity: where distant objects are sharp. The end stop is often past it.">Mark infinity</button>
       </div>
       <div class="hint">Put a target at a measured distance, focus on it while watching the monitor, type the
         distance and Mark. Mark closest focus, infinity <i>where far objects are sharp</i> (the end stop is often
         past it), and 5–10 distances in between.</div>
     </div>
     <div>
-      <canvas id="mapchart" height="170"></canvas>
+      <canvas id="mapchart" height="170" data-tip="The distance map: x = % of lens travel, y = 1/distance (infinity at the bottom). Green line: the lens now. Red zones: outside the outermost marks. Targets there are clamped to the nearest mark."></canvas>
       <div class="legend"><span>x: % of lens travel · y: 1/distance (∞ at the bottom)</span></div>
-      <table style="margin-top:8px"><thead><tr><th>distance</th><th class="num">%</th><th></th></tr></thead>
+      <table style="margin-top:8px" data-tip="Your marks. 'go' moves the lens there, ✕ deletes the mark (until you save)."><thead><tr><th>distance</th><th class="num">%</th><th></th></tr></thead>
         <tbody id="marks"></tbody></table>
       <div class="row" style="margin-top:10px">
-        <button id="savemap" class="primary">Save map</button>
-        <button id="discardmap">Discard changes</button>
+        <button id="savemap" class="primary" data-tip="Write the marks to the lens profile. Unsaved marks are lost on restart.">Save map</button>
+        <button id="discardmap" data-tip="Throw away unsaved marks and go back to the saved map.">Discard changes</button>
       </div>
     </div>
   </div>
@@ -203,40 +210,40 @@
 <div class="grid2">
   <div class="panel">
     <h2>Unreal</h2>
-    <div class="row"><label class="name">Host</label>
+    <div class="row" data-tip="IP address or name of the PC running Unreal, and its Remote Control WebSocket port (Project Settings → Remote Control, default 30020). Changing it reconnects."><label class="name">Host</label>
       <input type="text" data-set="unreal_host" style="flex:1;min-width:0">
       <input type="number" data-set="unreal_port" data-int="1" style="width:90px"></div>
-    <div class="row"><label class="name">Passphrase</label>
+    <div class="row" data-tip="Only needed if Unreal enforces a Remote Control passphrase for remote clients."><label class="name">Passphrase</label>
       <input type="password" data-set="unreal_passphrase" style="flex:1;min-width:0" placeholder="(none)"></div>
-    <div class="row"><label class="name">Preset</label>
+    <div class="row" data-tip="The Remote Control preset that exposes the camera's focus (Manual and/or Current Focus Distance) and, optionally, the feedback variables. Leave empty to use the first preset that exposes a CineCamera's focus."><label class="name">Preset</label>
       <input type="text" data-set="unreal_preset" style="flex:1;min-width:0" placeholder="auto-detect (Remote Control preset with the camera's focus)"></div>
-    <div class="row"><label class="name">Camera</label>
+    <div class="row" data-tip="An explicit CineCameraComponent object path. Overrides the preset; usually left empty."><label class="name">Camera</label>
       <input type="text" data-set="camera_path" style="flex:1;min-width:0" placeholder="from the preset"></div>
-    <div class="row"><label class="name"></label>
+    <div class="row" data-tip="Find lists the cameras exposed in presets (and the level's cameras, if Unreal allows listing them). Pick one to set the camera path."><label class="name"></label>
       <select id="cameras" style="flex:1;min-width:0"><option value="">— find cameras —</option></select>
       <button id="findcams">Find</button></div>
-    <div class="row"><label class="name">Feedback</label>
+    <div class="row" data-tip="Write the lens distance, position and bridge state to a BP_EdelkroneFeedback actor in the level, about 10 times a second, e.g. for an on-screen readout."><label class="name">Feedback</label>
       <label style="font-size:13px"><input type="checkbox" data-set="feedback_enabled"> write lens position to BP_EdelkroneFeedback</label></div>
-    <div class="hint" id="ueinfo"></div>
+    <div class="hint" id="ueinfo" data-tip="How the bridge reaches the camera: through a preset, a path or discovery, and whether the feedback actor was found."></div>
   </div>
   <div class="panel">
     <h2>Motion</h2>
-    <div class="row"><label class="name">Lead (ms)</label>
+    <div class="row" data-tip="How far ahead of Unreal the motor is commanded, to hide its ~270 ms lag. More lead means less lag on smooth pulls but more overshoot where a pull stops or reverses. Default 270 ms."><label class="name">Lead (ms)</label>
       <input type="range" min="0" max="600" step="10" data-set="lead_ms" data-int="1">
       <input type="number" min="0" max="1000" step="10" data-set="lead_ms" data-int="1"></div>
-    <div class="row"><label class="name">Max speed %/s</label>
+    <div class="row" data-tip="The fastest the bridge drives the lens, in % of travel per second. The motor manages about 60 %/s; pulls faster than this limit trail behind."><label class="name">Max speed %/s</label>
       <input type="range" min="5" max="60" step="1" data-set="max_speed_pct_s">
       <input type="number" min="1" max="100" step="1" data-set="max_speed_pct_s"></div>
-    <div class="row"><label class="name">Unreal timeout s</label>
+    <div class="row" data-tip="If Unreal sends no fresh focus value for this long, the lens holds where it is, and you can't arm."><label class="name">Unreal timeout s</label>
       <input type="number" min="0.2" max="10" step="0.1" data-set="ue_timeout_s"></div>
-    <div class="row" style="margin-top:14px"><button id="savecfg">Save as startup default</button></div>
+    <div class="row" style="margin-top:14px"><button id="savecfg" data-tip="Write the current settings to config.yaml, so the bridge starts with them next time.">Save as startup default</button></div>
     <div class="hint">Lead hides the motor's ~270 ms lag; more lead overshoots where a pull reverses.
       Changes apply immediately; Save keeps them for the next start (config.yaml).</div>
   </div>
 </div>
 
 <div class="panel">
-  <h2>Log</h2>
+  <h2 data-tip="Recent events, newest first: arming, takeovers, calibration, refusals.">Log</h2>
   <div class="log" id="log"></div>
 </div>
 
@@ -304,8 +311,7 @@
 
     var arm = $("arm");
     arm.textContent = s.armed ? "DISARM" : "ARM";
-    arm.className = "big " + (s.armed ? "armed" : "primary");
-    arm.disabled = !s.armed && !s.can_arm;
+    arm.className = "big " + (s.armed ? "armed" : "primary") + (!s.armed && !s.can_arm ? " off" : "");
     var why = s.problem && s.state !== "READY" ? s.problem : (s.why_not || "");
     $("whynot").textContent = (!s.armed && !s.can_arm && why) ? "Can't arm yet: " + why : "";
     document.querySelectorAll("#modeseg button").forEach(function (b) { b.classList.toggle("on", b.dataset.mode === s.mode); });
@@ -356,7 +362,7 @@
         : "Last calibration failed: " + c.error;
     }
     var idle = !s.armed && !s.busy;
-    $("calibrate").disabled = !idle || !m.connected || !s.lens.active;
+    $("calibrate").classList.toggle("off", !idle || !m.connected || !s.lens.active);
     $("mappanel").classList.toggle("disabled-box", !idle || !m.connected || !m.lens_ends_known);
 
     // map panel
@@ -479,11 +485,13 @@
   }
 
   // ---------------------------------------------------------------- controls
-  $("arm").onclick = function () { post("toggle-arm"); };
+  // ARM/Calibrate are greyed out with a class, not `disabled`: disabled buttons get no hover, so no explanation.
+  $("arm").onclick = function () { if (!$("arm").classList.contains("off")) post("toggle-arm"); };
   $("stop").onclick = function () { post("stop"); };
   document.querySelectorAll("#modeseg button").forEach(function (b) { b.onclick = function () { post("mode", { mode: b.dataset.mode }); }; });
   $("giveback").onclick = function () { post("lead", { leader: "unreal" }); };
   $("calibrate").onclick = function () {
+    if ($("calibrate").classList.contains("off")) return;
     if (confirm("Calibration drives the lens to BOTH end stops (~10–15 s).\nIs the motor mounted firmly and the lens clear?"))
       post("calibrate", { ask_direction: $("askdir").checked });
   };
@@ -541,6 +549,42 @@
       e.preventDefault(); post("move", { delta: (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 2 : 0.2) });
     }
   });
+
+  // ---------------------------------------------------------------- hover explanations ([data-tip])
+  // Hit-tested by position rather than by mouse events, so greyed-out controls (and the map panel
+  // while it can't be used) still explain themselves. The smallest element under the pointer wins.
+  var tipEl = document.createElement("div"), tipFor = null, tipTimer = null;
+  tipEl.className = "tip"; document.body.appendChild(tipEl);
+  function hideTip() { clearTimeout(tipTimer); tipFor = null; tipEl.classList.remove("on"); }
+  function tipAt(x, y) {
+    if ($("modalbg").style.display === "flex") return null;
+    var best = null, area = Infinity;
+    document.querySelectorAll("[data-tip]").forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      if (!r.width || x < r.left || x > r.right || y < r.top || y > r.bottom) return;
+      if (r.width * r.height < area) { area = r.width * r.height; best = el; }
+    });
+    return best;
+  }
+  function showTip(el) {
+    tipEl.textContent = el.dataset.tip;
+    tipEl.style.left = "0px"; tipEl.style.top = "0px";
+    var r = el.getBoundingClientRect(), t = tipEl.getBoundingClientRect();
+    var x = Math.min(Math.max(8, r.left), window.innerWidth - t.width - 8), y = r.bottom + 6;
+    if (y + t.height > window.innerHeight - 8) y = Math.max(8, r.top - t.height - 6);
+    tipEl.style.left = x + "px"; tipEl.style.top = y + "px";
+    tipEl.classList.add("on");
+  }
+  document.addEventListener("pointermove", function (e) {
+    if (e.pointerType === "touch") return;
+    var el = tipAt(e.clientX, e.clientY);
+    if (el === tipFor) return;
+    hideTip(); tipFor = el;
+    if (el) tipTimer = setTimeout(function () { showTip(el); }, 350);
+  });
+  document.documentElement.addEventListener("pointerleave", hideTip);
+  document.addEventListener("pointerdown", hideTip);
+  window.addEventListener("scroll", hideTip, true);
 
   function poll() {
     fetch("/api/state").then(function (r) { return r.json(); }).then(function (s) {

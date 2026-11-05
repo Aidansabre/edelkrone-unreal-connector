@@ -95,13 +95,13 @@ The first command plays a fake Unreal focus pull; the second runs the bridge aga
 
 ## 4. The web UI
 
-**http://127.0.0.1:8766.** The page refreshes 10× per second, and everything on it acts on the running bridge.
+**http://127.0.0.1:8766.** The page refreshes 10× per second, and everything on it acts on the running bridge. **Hover over any control or reading** for a short explanation of what it is or does. This works even when the control is greyed out.
 
 | Area | What it shows / does |
 |---|---|
 | **Status bar** | Motor (firmware, battery, ms per Bluetooth command), Unreal link (address, response time), active lens. A badge shows the bridge state: `READY`, `ARMED`, `NEEDS CALIBRATION`, `NEEDS LENS MAP`, `CALIBRATING`, … |
-| **Live** | **ARM / DISARM** (or `space`), **Stop**, mode: **Unreal → lens** / **Lens → Unreal** / **Both ways** (with a who-leads badge and **Give focus back to Unreal**). Three readouts: Unreal focus distance (and its % on this lens), the command sent (with lead), and the lens position. A 15-second chart of all three. If arming isn't possible, the reason appears under the button. |
-| **Setup** | Checklist: motor · lens profile · calibration · distance map. Lens selector (status per lens), **Create** a new lens. **Calibrate** button. |
+| **Live** | **ARM / DISARM** (or `space`), **Stop**, mode: **Both ways** (default, with a who-leads badge and **Give focus back to Unreal**) / **Unreal → lens** / **Lens → Unreal**. Three readouts: Unreal focus distance (and its % on this lens), the command sent (with lead), and the lens position. A 15-second chart of all three. If arming isn't possible, the reason appears under the button. |
+| **Setup** | Checklist: motor · lens profile · calibration · distance map. Lens selector (status per lens), **Create** a new lens. **Calibrate** button; **ask which end is closest focus** is on by default, so every calibration asks you at the end stop (untick it to reuse the answer stored for the lens). |
 | **Distance map** | Position in % (and ≈ distance once mapped). Jog −5 … +5 % (keyboard: `←`/`→` 0.2 %, with `shift` 2 %), slider, go to %. A distance box with **Mark**, plus **Mark infinity**. Marks table (go / delete), map plot (past-infinity zone shaded), **Save map**. Disabled while armed or calibrating. |
 | **Unreal** | Host, port, passphrase, camera path (or **Find** cameras), feedback on/off |
 | **Motion** | Lead (ms), max speed (% of travel per second), Unreal timeout |
@@ -135,7 +135,7 @@ Units accepted when marking: `1.5` (metres), `120cm`, `450mm`, `4ft`, `18in`, `i
 The motor forgets its calibration when switched off. After each **motor power-on**:
 
 1. **Start the bridge.** It shows `NEEDS CALIBRATION`.
-2. **Calibrate** (web UI button, `c`, or start with `--calibrate`). With a known lens there are no questions. The slip check confirms the mount: it passes if the encoder span is within 5 % of the lens's reference (typically < 0.2 %).
+2. **Calibrate** (web UI button, `c`, or start with `--calibrate`). The web UI asks which end is closest focus (untick **ask which end is closest focus** to skip that for a known lens); `c` and `--calibrate` reuse the stored answer. The slip check confirms the mount: it passes if the encoder span is within 5 % of the lens's reference (typically < 0.2 %).
 3. **The bridge reports `READY`** once Unreal is sending values. Arm.
 
 ## 7. Changing lenses
@@ -154,9 +154,9 @@ Selecting a different lens while the bridge runs always requires a new calibrati
 
 1. **Check the state is `READY`.** In Unreal, the camera with the focus you want to drive must be found (Unreal panel shows the camera; use **Find** if there is more than one).
 2. **Choose the mode:**
-   - **Unreal → lens** (normal): Sequencer keyframes, a live focus puller in Unreal, or the Tracking focus method drive the lens. If someone turns the lens by hand, it goes back to Unreal's focus when they let go.
+   - **Both ways** (default): Unreal leads until someone turns the lens by hand; then the lens leads and Unreal follows. Unreal takes over again as soon as its Manual Focus Distance changes to a value the bridge didn't write: someone types one in the Details panel, or Sequencer plays. **Give focus back to Unreal** in the web UI does the same. A badge next to the mode shows who leads. See "Both ways" below.
+   - **Unreal → lens:** Sequencer keyframes, a live focus puller in Unreal, or the Tracking focus method drive the lens. If someone turns the lens by hand, it goes back to Unreal's focus when they let go.
    - **Lens → Unreal:** the lens position is written into the camera's **Manual** focus distance. The camera's focus method must be *Manual*, with no Sequencer focus track active.
-   - **Both ways:** Unreal leads until someone turns the lens by hand; then the lens leads and Unreal follows. Unreal takes over again as soon as its Manual Focus Distance changes to a value the bridge didn't write: someone types one in the Details panel, or Sequencer plays. **Give focus back to Unreal** in the web UI does the same. A badge next to the mode shows who leads. See "Both ways" below.
 3. **ARM** (`space`). Watch the chart: green (lens) should follow purple (Unreal) closely.
 4. **Stop** or **DISARM** ends streaming and stops the motor. If Unreal stops sending (e.g. editor closed), the lens holds and the bridge waits.
 
@@ -213,7 +213,7 @@ All Bluetooth tools must run in **Terminal.app**, and only while the bridge is *
 | `unreal.poll_hz` | 60 | How often `CurrentFocusDistance` is read |
 | `unreal.infinity_cm` | 100000 | Distance written to Unreal for the infinity end (Lens → Unreal) |
 | `unreal.feedback.enabled` / `actor_path` / `rate_hz` | true / auto / 10 | Write lens position to `BP_EdelkroneFeedback` |
-| `bridge.mode` | `ue_drives` | `ue_drives`, `wheel_drives` or `both` |
+| `bridge.mode` | `both` | `both`, `ue_drives` or `wheel_drives` |
 | `bridge.latency_offset_ms` | `null` | Lead; `null` = backend default (Bluetooth 270 ms) |
 | `bridge.lead_smoothing_s` | 0.15 | Velocity smoothing of the lead predictor |
 | `bridge.ue_timeout_s` | 1.0 | Hold the lens if Unreal sends nothing for this long |
