@@ -78,7 +78,10 @@ Pick one. The steps below mark the parts that only apply to one of them.
    ```powershell
    .venv\Scripts\ek-ble scan
    ```
-   It should list `FocusPsPr` with an address like `D4:36:…`. **Don't pair the motor** in Windows Settings; the bridge connects without pairing. If it was paired before and won't connect, remove it there.
+   It should list `EK FocusPsPr` with an address like `C4:DE:E2:E9:8C:E8`. The scan also prints the motor's hardware address (`mac=…`), which is the address Windows uses.
+   - **Don't pair the motor** in Windows Settings: the bridge connects without pairing. If it was paired before and won't connect, remove it there.
+   - **Nothing found?** A motor that is connected to something stops advertising: the edelkrone app on any phone, tablet or Mac, or a bridge on another computer. Close those and scan again.
+   - **Still nothing?** `ek-ble scan --all` lists every Bluetooth device the PC can hear; look for `FocusPsPr`.
 6. **Start:** double-click **`Run Bridge.bat`**. A console window shows the bridge, and the browser opens **http://127.0.0.1:8766**. Close the window, or press Ctrl+C, to stop the bridge; that also stops the motor.
 
 ### 2b. macOS

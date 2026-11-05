@@ -528,3 +528,12 @@ def test_saved_address_must_fit_the_platform():
     assert address_usable(mac_uuid, "darwin") and not address_usable(hw, "darwin")
     assert address_usable(hw, "win32") and not address_usable(mac_uuid, "win32")
     assert address_usable(hw.replace(":", "-"), "win32") and not address_usable(None, "win32")
+
+
+def test_scan_recognises_the_focusplus_pro():
+    from tools.ble_scan import is_edelkrone
+
+    sd = {"00000000-0000-1000-8000-00805f9b34fb": bytes.fromhex("003c2012c4dee2e98ce8ffff")}  # real motor: 12 bytes
+    assert is_edelkrone("FocusPsPr", {})            # by name (Windows may not report service data)
+    assert is_edelkrone("", sd)                     # by edelkrone service data, any length
+    assert not is_edelkrone("LHB-3C7A0ED7", {"0000fe9f-0000-1000-8000-00805f9b34fb": b"\x00" * 12})
