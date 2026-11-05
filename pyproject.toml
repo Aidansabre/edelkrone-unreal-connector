@@ -1,8 +1,10 @@
 [project]
 name = "edelkrone-unreal-connector"
 version = "0.1.0"
-description = "Middleware between Unreal Engine CineCamera focus and an edelkrone FocusPLUS PRO via the edelkrone SDK"
+description = "Drive an edelkrone FocusPLUS PRO focus motor from an Unreal Engine CineCamera, and back"
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
   "httpx>=0.27",
   "websockets>=12",
@@ -22,7 +24,7 @@ ek-bridge = "bridge.app:main"
 ek-ble = "tools.ek_ble:main"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

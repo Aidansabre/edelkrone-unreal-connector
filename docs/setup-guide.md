@@ -61,7 +61,7 @@ Pick one. The steps below mark the parts that only apply to one of them.
      ```powershell
      git clone https://github.com/Aidansabre/edelkrone-unreal-connector.git
      ```
-   - Or, on GitHub, use **Code → Download ZIP** and unzip it (the repository is private, so you need access).
+   - Or, on [the GitHub page](https://github.com/Aidansabre/edelkrone-unreal-connector), use **Code → Download ZIP** and unzip it.
 3. **Install**, in PowerShell inside the project folder:
    ```powershell
    py -3.13 -m venv .venv

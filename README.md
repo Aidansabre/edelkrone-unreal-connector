@@ -62,3 +62,7 @@ cp config.example.yaml config.yaml
 ```
 
 58 tests, all offline: a simulated motor speaking the real frames, a fake Unreal Remote Control server and a fake edelkrone SDK.
+
+## License
+
+[MIT](LICENSE). Not affiliated with or endorsed by edelkrone or Epic Games. The FocusPLUS PRO Bluetooth protocol was worked out independently for interoperability; see [docs/focusplus-protocol.md](docs/focusplus-protocol.md).
