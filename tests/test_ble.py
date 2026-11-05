@@ -71,6 +71,23 @@ async def test_motor_reads():
     assert await m.read_encoder() == int(-111000 + 0.75 * 111000)  # 0 % = macro = high-encoder end
 
 
+async def test_dead_link_write_times_out_and_reconnects(monkeypatch):
+    """macOS: a write on a silently dead link never completes. It must not hold the lock forever."""
+    import ekble.motor as motor_mod
+    monkeypatch.setattr(motor_mod, "WRITE_TIMEOUT_S", 0.2)
+    dev = FakeMotorDevice(pct=25)
+    m = await _motor(dev)
+    dev.write_delay_s = 3600  # link dead, no disconnect event
+    t0 = asyncio.get_running_loop().time()
+    results = await asyncio.gather(m.read_status(), m.read_position(), return_exceptions=True)
+    assert asyncio.get_running_loop().time() - t0 < 1.0
+    assert all(isinstance(r, ConnectionError) for r in results)
+    assert not m.connected
+    dev.write_delay_s = 0.002  # motor back
+    await m.connect()
+    assert (await m.read_position()).percent == pytest.approx(25)
+
+
 async def test_sweep_builds_map():
     dev = FakeMotorDevice(pct=40, speed_pct_s=400)
     m = await _motor(dev)

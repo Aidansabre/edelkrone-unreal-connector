@@ -18,6 +18,8 @@ All numbers come from the real FocusPLUS PRO (firmware 0.30) on the test lens, o
 | Positioning accuracy at rest | **≤ 0.1 %** |
 | Tracking a smooth sine with a 270 ms lead | **0.18 %** mean error, 0.59 % max |
 | End to end (simulated Unreal pull, 80 ↔ 250 cm in 3 s) | **1.95 %** mean, 4.2 % p95, 5.5 % max |
+| End to end, **real Unreal**, 60 cm ↔ 15 m pulls in 6 s | **2.2 %** mean, 4.1 % p95, residual lag 20 ms |
+| Same in 3 s (needs 68 %/s, faster than the motor) | 4.9 % mean, 15.7 % p95: the lens trails by ~0.5 s mid-pull |
 | End-stop calibration (cmd 16) | 8.8–13.8 s; 18 s when the gear slipped |
 | Slip-check repeatability | 0.11 % (27,890 vs 27,859 counts) |
 
@@ -84,6 +86,24 @@ All numbers come from the real FocusPLUS PRO (firmware 0.30) on the test lens, o
 - **Throughput:** ~310 targets in 30 s, 0 errors; writes took 64–87 ms; Unreal reads took ~1 ms (local simulator).
 - **Lead choice:** a longer lead cuts the residual lag but overshoots where the pull reverses, so 270 ms stays the default. The remaining error comes from predicting reversals, not from fixed lag.
 - **Fast motion only:** these errors apply while the focus is moving fast. Held or slow focus lands within ≤ 0.1 % (section 4).
+
+## 5b. End to end with real Unreal (2026-11-05)
+**Setup:**
+- **Unreal:** a Unreal 5 editor on Windows over the LAN (~20 ms Remote Control round trip). The camera has *Smooth Focus Changes* on, at its default interp speed of 8.
+- **Pulls:** `ue-probe pull` wrote Manual Focus Distance through the preset, 30 times per second. Each pull was eased and linear in diopters, between 60 cm and 15 m (0 % ↔ 93.5 % on test-lens), with a 2 s hold at each end, repeated twice.
+- **Bridge:** it drove the lens from the camera's Current Focus Distance, which is what Unreal renders, smoothing included.
+- **Recording:** the running bridge was recorded with `tools/record_state.py` and analysed with `tools/analyze_bridge_log.py`.
+
+| Pull duration | Peak speed needed | Error mean / p95 | Residual lag | Distance error mean / p95 |
+|---|---|---|---|---|
+| **6 s** | 36 %/s | **2.23 / 4.10 %** | **20 ms** | 6.1 % / 20.6 % |
+| 3 s | 68 %/s | 4.93 / 15.7 % | 180 ms | 20.5 % / 50.7 % |
+
+- **Within the motor's speed, the lead hides the delay.** Unreal → bridge → motor matches the simulator results.
+- **Faster than the motor, the lens falls behind.** The 3 s pull needs more than the ~60 %/s the motor can do (the bridge caps it at 55 %/s). The lens catches up about 0.5 s after the move ends. For pulls like that, either slow them down in Unreal or delay the picture.
+- **At rest it's exact:** 60.0 cm, 15.2 m and 99.9 cm, against 60, 15 and 100 cm requested.
+- **Overshoot:** when a fast pull stops, the lead overshoots by about 2 % of travel (at the far end, 15 m → ~38 m) and settles within ~0.5 s.
+- **Max error column:** sudden jumps (the value restore at the end of a run) show up as large max errors. They're steps, not tracking.
 
 ## 6. Calibration
 

@@ -23,6 +23,7 @@ import asyncio
 import logging
 import math
 import sys
+import threading
 
 from ekble.streamer import LeadPredictor
 from tools.common import load_config
@@ -44,7 +45,8 @@ class Bridge(BridgeControl):
         u, b = cfg["unreal"], cfg["bridge"]
         self.backend = backend or make_backend(cfg)
         self.rc = RCClient(u["host"], u["port"], u["passphrase"])
-        self.cam = UECamera(self.rc, u["camera_path"], poll_hz=u["poll_hz"], feedback_actor=u["feedback"]["actor_path"])
+        self.cam = UECamera(self.rc, u["camera_path"], poll_hz=u["poll_hz"], feedback_actor=u["feedback"]["actor_path"],
+                            preset=u.get("preset"))
         lead_ms = b["latency_offset_ms"]
         self.lead_s = self.backend.default_lead_s if lead_ms is None else lead_ms / 1000.0
         self.predictor = LeadPredictor(self.lead_s, smoothing_s=b.get("lead_smoothing_s", 0.15))
@@ -215,12 +217,18 @@ class Bridge(BridgeControl):
                 await self._sleep(1.0 / hz)
 
     async def input_loop(self) -> None:
+        # Read stdin on a daemon thread: an executor thread blocked in readline() would make
+        # asyncio.run() wait (up to 5 min) for it on Ctrl-C.
         loop = asyncio.get_running_loop()
+        lines: asyncio.Queue[str] = asyncio.Queue()
+
+        def reader():
+            for raw in sys.stdin:
+                loop.call_soon_threadsafe(lines.put_nowait, raw)
+
+        threading.Thread(target=reader, name="stdin", daemon=True).start()
         while not self._stop.is_set():
-            line = await loop.run_in_executor(None, sys.stdin.readline)
-            if not line:  # stdin closed
-                await self._sleep(3600)
-                continue
+            line = await lines.get()
             cmd = line.strip().lower()
             if cmd == "a":
                 await (self.disarm() if self.state == "ARMED" else self.arm())

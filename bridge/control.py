@@ -22,6 +22,8 @@ import yaml
 from ekble.lensmap_wizard import fmt_distance, parse_distance
 from eklink.lens import INF, LensProfile
 from tools.common import ROOT, lens_dir, lens_path, resolve_path
+from unreal.camera import PresetBinding
+from unreal.rc_client import RCError
 
 from .backends import READY
 
@@ -180,6 +182,7 @@ class BridgeControl:
                 "connected": self.rc.connected.is_set(),
                 "camera": self.cam.active_path,
                 "feedback_actor": self.cam.feedback_actor,
+                **self.cam.describe(),
                 "cm": _num(ue_cm, 1), "age_ms": _num(self.cam.age_s() * 1000, 0),
                 "rtt_ms": _num(self.cam.stats.rtt_ms, 1), "polls": self.cam.stats.polls,
                 "errors": self.cam.stats.errors, "last_error": self.cam.stats.last_error,
@@ -202,6 +205,7 @@ class BridgeControl:
             "events": list(self.events)[-25:],
             "settings": {
                 "unreal_host": u["host"], "unreal_port": u["port"], "unreal_passphrase": u["passphrase"] or "",
+                "unreal_preset": u.get("preset") or "",
                 "camera_path": u["camera_path"] or "", "poll_hz": u["poll_hz"],
                 "feedback_enabled": u["feedback"]["enabled"],
                 "lead_ms": round(self.lead_s * 1000),
@@ -215,7 +219,14 @@ class BridgeControl:
         fn = getattr(self, "act_" + name.replace("-", "_"), None)
         if fn is None:
             raise KeyError(f"unknown action {name!r}")
-        res = await fn(**(body or {}))
+        quiet = name in ("settings", "move")  # sliders/jog: too chatty for the log
+        if not quiet:
+            log.info("web UI: %s %s", name, body or "")
+        try:
+            res = await fn(**(body or {}))
+        except Exception as e:
+            self.note(f"{name}: {e}", "warn")  # refusals show in the log panel and terminal, not only the page
+            raise
         return res or {}
 
     async def act_arm(self):
@@ -416,6 +427,11 @@ class BridgeControl:
             new = str(kv["unreal_passphrase"]) or None
             reconnect |= new != u["passphrase"]
             u["passphrase"] = new
+        if "unreal_preset" in kv:
+            new = str(kv["unreal_preset"]).strip() or None
+            if new != u.get("preset"):
+                u["preset"] = new
+                reconnect = True
         if "camera_path" in kv:
             new = str(kv["camera_path"]).strip() or None
             if new != u["camera_path"]:
@@ -443,6 +459,7 @@ class BridgeControl:
         self.rc.url = f"ws://{u['host']}:{u['port']}"
         self.rc.passphrase = u["passphrase"]
         self.cam.configured_path = self.cam.editor_path = u["camera_path"]
+        self.cam.preset_name = u.get("preset")
         self.cam.active_path = None
         self.cam.latest = None
         await self.rc.close()
@@ -458,4 +475,15 @@ class BridgeControl:
     async def act_find_cameras(self):
         if not self.rc.connected.is_set():
             raise RuntimeError("not connected to Unreal")
-        return {"cameras": await self.rc.find_cine_cameras()}
+        cams: list[str] = []
+        for n in await self.rc.list_presets():
+            p = PresetBinding.parse(n, await self.rc.get_preset(n))
+            if p.camera_path and p.camera_path not in cams:
+                cams.append(p.camera_path)
+        try:
+            cams += [c for c in await self.rc.find_cine_cameras() if c not in cams]
+        except RCError:
+            if not cams:
+                raise RuntimeError("no preset exposes a camera, and Unreal doesn't allow listing level actors: "
+                                   "expose the camera's focus in a Remote Control preset") from None
+        return {"cameras": cams}

@@ -201,7 +201,8 @@ All Bluetooth tools must run in **Terminal.app**, and only while the bridge is *
 | `lens.dir` | `lenses` | Folder of lens profiles |
 | `unreal.host` / `port` | 127.0.0.1 / 30020 | Unreal Remote Control WebSocket server |
 | `unreal.passphrase` | `null` | If Unreal enforces a passphrase for remote clients |
-| `unreal.camera_path` | `null` | CineCameraComponent object path; `null` = first CineCamera in the level |
+| `unreal.preset` | `null` | Remote Control preset exposing the camera focus; `null` = auto-detect |
+| `unreal.camera_path` | `null` | Explicit CineCameraComponent object path (overrides the preset); `null` = from the preset |
 | `unreal.poll_hz` | 60 | How often `CurrentFocusDistance` is read |
 | `unreal.infinity_cm` | 100000 | Distance written to Unreal for the infinity end (Lens → Unreal) |
 | `unreal.feedback.enabled` / `actor_path` / `rate_hz` | true / auto / 10 | Write lens position to `BP_EdelkroneFeedback` |

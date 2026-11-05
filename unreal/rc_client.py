@@ -184,6 +184,28 @@ class RCClient:
         return await self.request("/remote/info", "GET")
 
     # ------------------------------------------------------------------ presets
+    async def list_presets(self) -> list[str]:
+        body = await self.request("/remote/presets", "GET")
+        return [p.get("Name") for p in (body or {}).get("Presets", []) if p.get("Name")]
+
+    async def get_preset(self, preset: str) -> dict:
+        body = await self.request(f"/remote/preset/{preset}", "GET")
+        return (body or {}).get("Preset", {})
+
+    async def preset_read(self, preset: str, field: str) -> Any:
+        """Value of an exposed property (field = its ID or label)."""
+        body = await self.request(f"/remote/preset/{preset}/property/{field}", "GET")
+        vals = (body or {}).get("PropertyValues") or []
+        if not vals:
+            raise RCError(f"/remote/preset/{preset}/property/{field}", 200, "no PropertyValues in reply")
+        return vals[0].get("PropertyValue")
+
+    async def preset_write(self, preset: str, field: str, value: Any, transaction: bool = False) -> Any:
+        return await self.request(
+            f"/remote/preset/{preset}/property/{field}", "PUT",
+            {"PropertyValue": value, "GenerateTransaction": transaction},
+        )
+
     async def preset_register(self, preset: str, ignore_remote_changes: bool = True) -> None:
         await self._ws.send(json.dumps({
             "MessageName": "preset.register",

@@ -60,7 +60,7 @@ We could drive the motor by speed and close the loop ourselves, but the motor re
 Which encoder end is closest focus, the slip-check reference and the distance map all depend on **the lens and how the motor sits on it**, so each lens gets one file in `lenses/`. Switching lenses forces a recalibration before the bridge will arm.
 
 ### 5. Unreal Remote Control API, polled
-No Unreal plugin is needed. We **poll** `CurrentFocusDistance` rather than subscribing to preset events, because those events are expected not to fire for Sequencer-evaluated or Tracking-computed values. This is the main Unreal-side assumption still to verify.
+No Unreal plugin is needed. We **poll** `CurrentFocusDistance` rather than subscribing to preset events, because those events are expected not to fire for Sequencer-evaluated or Tracking-computed values. This is the main Unreal-side assumption still to verify. The camera comes from a **Remote Control preset**: Unreal refuses the editor's actor-listing call by default, and the preset documents exactly what the bridge touches.
 
 ### 6. One process owns the motor
 The motor accepts **one Bluetooth connection**, and on macOS Bluetooth only works from **Terminal.app**, which holds the Bluetooth permission. So `ek-bridge` runs in Terminal and serves the **web UI** itself, and calibration, mapping and settings all go through it. The command-line tools (`ek-ble …`) are for when the bridge isn't running.
@@ -95,7 +95,7 @@ During calibration, a **slip check** compares the encoder span with the lens's s
 | Lens mapping (CLI and web UI) | ✅ `test-lens` mapped: 8 marks, 60 cm … ∞ (96.66 %) |
 | Streaming + lead | ✅ Real motor following a simulated Unreal pull: ~2 % of travel average error on a fast pull, ≤ 0.1 % at rest |
 | Web UI | ✅ Full flow verified against the simulator; read-only against the real motor. Moving actions (jog, calibrate, arm) not yet exercised on hardware through the UI |
-| Unreal Remote Control side | 🟡 Built and tested against a simulator; **not yet run against real Unreal** ([unreal-setup.md](unreal-setup.md)) |
+| Unreal Remote Control side | 🟡 Connected to a real editor: preset, focus reads (~40–50 Hz), writes. Sequencer, Tracking, PIE and feedback still to check ([unreal-setup.md](unreal-setup.md)) |
 | Link Adapter backend | ⏸ Built and tested offline; blocked by the motor not being recognised (legacy) |
 | Link Adapter's encoder wheel | ⏸ Not usable on the Bluetooth path; investigation steps in the research log |
 
@@ -104,7 +104,7 @@ During calibration, a **slip check** compares the encoder span with the lens's s
 | Document | For |
 |---|---|
 | [user-guide.md](user-guide.md) | Operators: setup, calibration, lens mapping, running, troubleshooting |
-| [unreal-setup.md](unreal-setup.md) | One-time Unreal project setup (next milestone) |
+| [unreal-setup.md](unreal-setup.md) | One-time Unreal project setup and verification status |
 | [focusplus-protocol.md](focusplus-protocol.md) | Bluetooth protocol reference for the FocusPLUS PRO |
 | [performance.md](performance.md) | Measured latency, speed and tracking accuracy |
 | [development.md](development.md) | Code structure, tests, simulator, extending the project |

@@ -84,6 +84,58 @@ async def test_camera_falls_back_to_editor_when_no_pie():
         await ue.stop()
 
 
+async def test_camera_from_preset_with_calls_blocked():
+    """The real-editor default: discovery calls refused, everything goes through the preset."""
+    ue = await FakeUE(preset="Edelkrone", allow_calls=False).start()
+    try:
+        async with RCClient("127.0.0.1", ue.port) as rc:
+            cam = UECamera(rc)
+            await cam.resolve_paths()
+            assert (cam.source, cam.active_path, cam.feedback_actor) == ("preset", FakeUE.CAM, FakeUE.FB)
+            assert cam.describe()["focus_via"] == "preset"
+            n = len(ue.requests)
+            assert await cam.read_focus_cm() == 200.0
+            await cam.write_manual_focus(150.0)
+            assert ue.focus_cm == 150.0
+            await cam.write_feedback(150.0, 12.5, "ARMED")
+            assert ue.props[(FakeUE.FB, "BridgeState")] == "ARMED"
+            assert ue.props[(FakeUE.FB, "MotorEncoder")] == 12.5
+            assert all(r["Url"].startswith("/remote/preset/Edelkrone/property/") for r in ue.requests[n:])
+    finally:
+        await ue.stop()
+
+
+async def test_preset_with_only_manual_focus_reads_current_focus_from_object():
+    """Like the first real preset: only Manual Focus Distance exposed, no feedback actor."""
+    ue = await FakeUE(preset="NewRemoteControlPreset", preset_fields=["ManualFocusDistance"], allow_calls=False).start()
+    try:
+        async with RCClient("127.0.0.1", ue.port) as rc:
+            cam = UECamera(rc)
+            await cam.resolve_paths()
+            assert (cam.active_path, cam.feedback_actor) == (FakeUE.CAM, None)
+            assert cam.describe() == {"source": "preset", "preset": "NewRemoteControlPreset",
+                                      "preset_fields": ["ManualFocusDistance"], "focus_via": "object"}
+            assert await cam.read_focus_cm() == 200.0
+            assert ue.requests[-1]["Body"]["propertyName"] == "CurrentFocusDistance"
+            await cam.write_manual_focus(90.0)
+            assert ue.requests[-1]["Url"].startswith("/remote/preset/NewRemoteControlPreset/property/")
+            await cam.write_feedback(90.0, 1.0, "READY")  # no feedback actor: silently nothing
+    finally:
+        await ue.stop()
+
+
+async def test_no_preset_and_calls_blocked_explains_what_to_do():
+    ue = await FakeUE(allow_calls=False).start()
+    try:
+        async with RCClient("127.0.0.1", ue.port) as rc:
+            with pytest.raises(RuntimeError, match="preset"):
+                await UECamera(rc).resolve_paths()
+            with pytest.raises(RuntimeError, match="not found"):
+                await UECamera(rc, preset="Missing").resolve_paths()
+    finally:
+        await ue.stop()
+
+
 # ---------------------------------------------------------------- bridge end to end
 def _lens(tmp_path):
     p = LensProfile("t")

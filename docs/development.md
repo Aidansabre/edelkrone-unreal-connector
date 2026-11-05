@@ -7,7 +7,7 @@ Code structure, how the pieces interact, testing, and how to extend the project.
 ```bash
 /opt/homebrew/bin/python3.13 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
-.venv/bin/pytest            # 48 tests, all offline (no motor, no Unreal)
+.venv/bin/pytest            # 52 tests, all offline (no motor, no Unreal)
 ```
 
 | | |
@@ -34,8 +34,8 @@ ekble/             FocusPLUS PRO Bluetooth driver
   mapping.py         build a map from the motor's app-learned cm readout (optional)
   sim.py             simulated motor speaking the real frames (tests, --simulate)
 unreal/            Unreal Remote Control client
-  rc_client.py       WebSocket, http-over-ws requests (id matching + FIFO fallback), presets, discovery
-  camera.py          UECamera: path resolution (editor/PIE), polling, focus/feedback writes
+  rc_client.py       WebSocket, http-over-ws requests (id matching + FIFO fallback), preset routes, discovery
+  camera.py          UECamera: camera from path / preset / discovery, PIE following, polling, focus/feedback writes
 eklink/            legacy Link Adapter backend + shared lens maths
   client.py          async client for the 2022 edelkrone SDK HTTP API
   focus.py           realtime-setpoint streamer for that API
@@ -101,7 +101,7 @@ STARTING → NOT_CONNECTED / NO_STATUS → NEEDS_CALIBRATION → NEEDS_LENS_MAP 
 | `mark` | `{distance: "1.5" \| "120cm" \| "inf" …}` |
 | `delete-mark`, `goto-mark` | `{distance}` |
 | `save-map`, `discard-map` | – |
-| `settings` | `{unreal_host, unreal_port, unreal_passphrase, camera_path, feedback_enabled, lead_ms, max_speed_pct_s, ue_timeout_s}` (any subset) |
+| `settings` | `{unreal_host, unreal_port, unreal_passphrase, unreal_preset, camera_path, feedback_enabled, lead_ms, max_speed_pct_s, ue_timeout_s}` (any subset) |
 | `save-settings`, `find-cameras` | – |
 
 **Adding an action:** write `async def act_<name>(self, ...)` in `BridgeControl`. The server picks it up automatically. Raise `RuntimeError`/`ValueError` for user-facing errors (they become 400s). Run long work as a task and report it through the snapshot.
@@ -126,8 +126,9 @@ STARTING → NOT_CONNECTED / NO_STATUS → NEEDS_CALIBRATION → NEEDS_LENS_MAP 
 | Tool | Hardware? | Purpose |
 |---|---|---|
 | `tools/ek_ble.py` (`ek-ble`) | Bluetooth | Operator CLI: scan, status, lenses, calibrate, lens-map, goto, abort |
-| `tools/ue_probe.py` (`ue-probe`) | Unreal | Remote Control checks: info, find-cameras, read rate/latency, subscribe-test, writes |
-| `tools/sim_ue.py` | – | Stand-in Unreal Remote Control server (sine/steps/hold focus profiles) |
+| `tools/ue_probe.py` (`ue-probe`) | Unreal | Remote Control checks: info, find-cameras (presets), read rate/latency, subscribe-test, writes, scripted `pull` |
+| `tools/record_state.py` | – | Record a running bridge's live values (web API) in the `--log` CSV format |
+| `tools/sim_ue.py` | – | Stand-in Unreal Remote Control server (sine/steps/hold focus profiles; a preset; discovery calls blocked like real Unreal unless `--allow-calls`) |
 | `tools/analyze_bridge_log.py` | – | Tracking error and lag from an `ek-bridge --log` CSV |
 | `tools/ble_scan.py`, `ble_probe.py` | Bluetooth | Listen-only scan; read-only connect + GATT dump |
 | `tools/ble_jog_test.py`, `ble_track_test.py`, `ble_latency_test.py`, `ble_speed_test.py` | Bluetooth | The measurements in [performance.md](performance.md) |

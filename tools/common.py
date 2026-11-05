@@ -39,6 +39,7 @@ DEFAULTS: dict[str, Any] = {
         "host": "127.0.0.1",
         "port": 30020,
         "passphrase": None,
+        "preset": None,  # Remote Control preset name; None = auto-detect
         "camera_path": None,
         "poll_hz": 60,
         "infinity_cm": 100000,

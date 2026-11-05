@@ -10,7 +10,7 @@ Unreal (Windows) ──Remote Control WebSocket──▶ ek-bridge (Mac) ──B
 
 **Status (2026-11-05):**
 - **Motor side: complete and verified on hardware.** Calibration and lens mapping work without the app. The motor follows a streamed pull with ~2 % of lens travel average error on fast moves and ≤ 0.1 % at rest. There is a web UI for everything.
-- **Unreal side:** built and tested against a simulator; validation against real Unreal is next ([docs/unreal-setup.md](docs/unreal-setup.md)).
+- **Unreal side:** connected to a real Unreal editor through a Remote Control preset; reads focus at ~40–50 Hz. Sequencer, Tracking and PIE checks are next ([docs/unreal-setup.md](docs/unreal-setup.md)).
 
 ## Quick start
 
@@ -44,7 +44,7 @@ cp config.example.yaml config.yaml
 |---|---|
 | [Overview](docs/overview.md) | Architecture, key decisions, safety model, status |
 | [User guide](docs/user-guide.md) | Setup, web UI, calibration, lens mapping, changing lenses, running, config, troubleshooting |
-| [Unreal setup](docs/unreal-setup.md) | Remote Control API, firewall, camera, feedback actor |
+| [Unreal setup](docs/unreal-setup.md) | Remote Control API, preset, firewall, camera, feedback actor, verification status |
 | [FocusPLUS PRO protocol](docs/focusplus-protocol.md) | Bluetooth GATT, frames, commands, replies |
 | [Performance](docs/performance.md) | Measured latency, speed, accuracy |
 | [Development](docs/development.md) | Code layout, runtime architecture, web API, tests, tools |
@@ -56,4 +56,4 @@ cp config.example.yaml config.yaml
 .venv/bin/pytest
 ```
 
-48 tests, all offline: a simulated motor speaking the real frames, a fake Unreal Remote Control server and a fake edelkrone SDK.
+52 tests, all offline: a simulated motor speaking the real frames, a fake Unreal Remote Control server and a fake edelkrone SDK.

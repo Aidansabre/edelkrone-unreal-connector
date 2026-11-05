@@ -61,8 +61,11 @@ class FakeUE:
     CAM = "/Game/Maps/Stage.Stage:PersistentLevel.CineCameraActor_1.CameraComponent"
     FB = "/Game/Maps/Stage.Stage:PersistentLevel.BP_EdelkroneFeedback_C_1"
 
-    def __init__(self, echo_ids=True):
+    def __init__(self, echo_ids=True, preset=None, preset_fields=None, allow_calls=True):
+        from tools.sim_ue import DEFAULT_PRESET_FIELDS, SimPreset
         self.echo_ids = echo_ids
+        self.allow_calls = allow_calls
+        self.preset = SimPreset(preset, preset_fields or DEFAULT_PRESET_FIELDS, self.CAM, self.FB) if preset else None
         self.focus_cm = 200.0
         self.focus_method = "Manual"
         self.props: dict[tuple[str, str], object] = {}
@@ -86,11 +89,29 @@ class FakeUE:
                 continue
             p = msg["Parameters"]
             self.requests.append(p)
-            code, body = self._route(p["Url"], p.get("Body") or {})
+            code, body = self._route(p["Url"], p.get("Body") or {}, p.get("Verb", "PUT"))
             rid = p.get("RequestId", -1) if self.echo_ids else -1
             await ws.send(json.dumps({"RequestId": rid, "ResponseCode": code, "ResponseBody": body}))
 
-    def _route(self, url, b):
+    def _read(self, obj, prop):
+        if obj == self.CAM and prop in ("CurrentFocusDistance", "ManualFocusDistance"):
+            return self.focus_cm
+        return self.props.get((obj, prop))
+
+    def _write(self, obj, prop, val):
+        if obj == self.CAM and prop == "ManualFocusDistance":
+            self.focus_cm = val
+        self.props[(obj, prop)] = val
+
+    def _route(self, url, b, verb="PUT"):
+        if self.preset:
+            r = self.preset.route(url, verb, b, self._read, self._write)
+            if r is not None:
+                return r
+        if url == "/remote/presets":
+            return 200, {"Presets": []}
+        if url == "/remote/object/call" and not self.allow_calls:
+            return 400, {"errorMessage": "Executing function is not allowed by remote control settings."}
         if url == "/remote/object/call" and b.get("functionName") == "GetAllLevelActors":
             return 200, {"ReturnValue": [self.CAM.rsplit(".", 1)[0], self.FB, "/Game/Maps/Stage.Stage:PersistentLevel.Floor"]}
         if url == "/remote/object/property":

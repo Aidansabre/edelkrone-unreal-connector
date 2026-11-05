@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import csv
 import json
+import math
 import statistics
 import sys
 import time
@@ -22,8 +23,8 @@ from datetime import datetime
 from pathlib import Path
 
 from tools.common import ROOT, load_config
-from unreal.camera import UECamera
-from unreal.rc_client import RCClient
+from unreal.camera import PresetBinding, UECamera
+from unreal.rc_client import RCClient, RCError
 
 
 def _client(cfg, a) -> RCClient:
@@ -34,8 +35,11 @@ def _client(cfg, a) -> RCClient:
 async def _camera(rc: RCClient, cfg, a) -> UECamera:
     u = cfg["unreal"]
     cam = UECamera(rc, a.path or u["camera_path"], poll_hz=getattr(a, "rate", u["poll_hz"]), prefer_pie=not a.no_pie,
-                   feedback_actor=getattr(a, "actor", None) or u["feedback"]["actor_path"])
+                   feedback_actor=getattr(a, "actor", None) or u["feedback"]["actor_path"],
+                   preset=getattr(a, "preset_name", None) or u.get("preset"))
     await cam.resolve_paths()
+    d = cam.describe()
+    print(f"camera {cam.active_path} via {d['source']}" + (f" {d['preset']} (focus read via {d['focus_via']})" if d["preset"] else ""))
     return cam
 
 
@@ -46,7 +50,14 @@ async def cmd_info(rc, cfg, a):
 
 
 async def cmd_find_cameras(rc, cfg, a):
-    cams = await rc.find_cine_cameras()
+    for n in await rc.list_presets():
+        b = PresetBinding.parse(n, await rc.get_preset(n))
+        print(f"preset {n}: camera {b.camera_path}, feedback {b.feedback_path}, fields {sorted(b.fields)}")
+    try:
+        cams = await rc.find_cine_cameras()
+    except RCError as e:
+        print(f"level actor listing not allowed: {e}")
+        return
     if not cams:
         print("no CineCameraActors in the editor level")
     for c in cams:
@@ -149,6 +160,39 @@ async def cmd_write_focus(rc, cfg, a):
     print(f"wrote ManualFocusDistance={a.cm}; CurrentFocusDistance now {await cam.read_focus_cm()}")
 
 
+async def cmd_pull(rc, cfg, a):
+    """Scripted focus pulls written to ManualFocusDistance: eased, linear in diopters like a focus puller."""
+    cam = await _camera(rc, cfg, a)
+    await cam.read_focus_settings()
+    if cam.focus_method_is_manual() is False:
+        raise SystemExit(f"FocusMethod is {cam.focus_method}; set it to Manual for scripted pulls")
+    original = float((await cam.read_focus_settings()).get("ManualFocusDistance", a.near))
+    dn, df = 1.0 / a.near, 1.0 / a.far
+
+    async def ramp(d0, d1):
+        t0 = time.monotonic()
+        while (x := (time.monotonic() - t0) / a.seconds) < 1.0:
+            e = 0.5 - 0.5 * math.cos(math.pi * x)
+            await cam.write_manual_focus(1.0 / (d0 + (d1 - d0) * e))
+            await asyncio.sleep(1.0 / a.rate)
+        await cam.write_manual_focus(1.0 / d1)
+
+    print(f"pulls {a.near:g} <-> {a.far:g} cm, {a.seconds:g} s each, {a.repeat}x, hold {a.hold:g} s")
+    try:
+        await cam.write_manual_focus(a.near)
+        await asyncio.sleep(a.hold)
+        for i in range(a.repeat):
+            await ramp(dn, df)
+            print(f"  {i + 1}: at {a.far:g} cm")
+            await asyncio.sleep(a.hold)
+            await ramp(df, dn)
+            print(f"  {i + 1}: at {a.near:g} cm")
+            await asyncio.sleep(a.hold)
+    finally:
+        await cam.write_manual_focus(original)
+        print(f"restored ManualFocusDistance={original:g}")
+
+
 async def cmd_write_feedback(rc, cfg, a):
     cam = await _camera(rc, cfg, a)
     if not cam.feedback_actor:
@@ -159,7 +203,7 @@ async def cmd_write_feedback(rc, cfg, a):
 
 COMMANDS = {
     "info": cmd_info, "find-cameras": cmd_find_cameras, "settings": cmd_settings, "read": cmd_read,
-    "subscribe-test": cmd_subscribe_test, "write-focus": cmd_write_focus, "write-feedback": cmd_write_feedback,
+    "subscribe-test": cmd_subscribe_test, "write-focus": cmd_write_focus, "pull": cmd_pull, "write-feedback": cmd_write_feedback,
 }
 
 
@@ -172,6 +216,8 @@ def build_parser():
     p.add_argument("--timeout", type=float, default=1.0)
     p.add_argument("--path", help="CineCameraComponent object path (default: config or auto-discover)")
     p.add_argument("--no-pie", action="store_true", help="don't follow the PIE copy of the camera")
+    p.add_argument("--use-preset", dest="preset_name", metavar="NAME",
+                   help="Remote Control preset to take the camera from (default: config or auto-detect)")
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("info")
     sub.add_parser("find-cameras")
@@ -185,6 +231,13 @@ def build_parser():
     s.add_argument("--seconds", type=float, default=15)
     s = sub.add_parser("write-focus")
     s.add_argument("cm", type=float)
+    s = sub.add_parser("pull", help="scripted focus pulls via ManualFocusDistance (restores it afterwards)")
+    s.add_argument("--near", type=float, default=60)
+    s.add_argument("--far", type=float, default=1500)
+    s.add_argument("--seconds", type=float, default=3, help="duration of one pull")
+    s.add_argument("--hold", type=float, default=2, help="pause at each end")
+    s.add_argument("--repeat", type=int, default=2)
+    s.add_argument("--rate", type=float, default=30, help="writes per second")
     s = sub.add_parser("write-feedback")
     s.add_argument("cm", type=float)
     s.add_argument("enc", type=float)

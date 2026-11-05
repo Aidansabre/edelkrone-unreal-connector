@@ -205,8 +205,10 @@
       <input type="number" data-set="unreal_port" data-int="1" style="width:90px"></div>
     <div class="row"><label class="name">Passphrase</label>
       <input type="password" data-set="unreal_passphrase" style="flex:1;min-width:0" placeholder="(none)"></div>
+    <div class="row"><label class="name">Preset</label>
+      <input type="text" data-set="unreal_preset" style="flex:1;min-width:0" placeholder="auto-detect (Remote Control preset with the camera's focus)"></div>
     <div class="row"><label class="name">Camera</label>
-      <input type="text" data-set="camera_path" style="flex:1;min-width:0" placeholder="auto-detect"></div>
+      <input type="text" data-set="camera_path" style="flex:1;min-width:0" placeholder="from the preset"></div>
     <div class="row"><label class="name"></label>
       <select id="cameras" style="flex:1;min-width:0"><option value="">— find cameras —</option></select>
       <button id="findcams">Find</button></div>
@@ -374,8 +376,16 @@
       if (v === undefined || v === null) v = "";
       if (el.type === "checkbox") el.checked = !!v; else el.value = v;
     });
-    $("ueinfo").textContent = u.camera ? "camera: " + u.camera.split(":").pop() + (u.feedback_actor ? " · feedback: " + u.feedback_actor.split(".").pop() : " · no feedback actor found") :
-      (u.last_error ? "last error: " + u.last_error : "");
+    var info = "";
+    if (u.camera) {
+      info = "camera: " + u.camera.split(":").pop();
+      if (u.source === "preset") info += " · via preset " + u.preset;
+      else if (u.source === "path") info += " · set by path";
+      if (u.source === "preset" && u.focus_via !== "preset")
+        info += " · focus read from the camera directly (expose Current Focus Distance in the preset to go through it)";
+      info += u.feedback_actor ? " · feedback: " + u.feedback_actor.split(".").pop() : " · no feedback actor";
+    } else if (u.last_error) info = "last error: " + u.last_error;
+    $("ueinfo").textContent = info;
 
     // question dialog
     var q = s.question, bg = $("modalbg");

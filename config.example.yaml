@@ -21,7 +21,8 @@ unreal:
   host: 192.168.1.50          # Windows PC running Unreal (Remote Control WebSocket server)
   port: 30020
   passphrase: null            # set if "Enforce passphrase for remote clients" is on
-  camera_path: null           # CineCameraComponent object path; null = auto-discover (see ue-probe find-cameras)
+  preset: null                # Remote Control preset exposing the camera focus; null = auto-detect
+  camera_path: null           # explicit CineCameraComponent object path (overrides the preset); null = use the preset
   poll_hz: 60                 # how often we read CurrentFocusDistance
   infinity_cm: 100000         # value written to UE when the lens is at infinity
   feedback:

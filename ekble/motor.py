@@ -20,6 +20,8 @@ from . import protocol as P
 
 log = logging.getLogger(__name__)
 
+WRITE_TIMEOUT_S = 2.0  # writes normally take ~70 ms
+
 
 @dataclass
 class MotorState:
@@ -99,9 +101,13 @@ class BleFocusMotor:
         else:
             factory = self._client_factory
         self.client = factory(dev, timeout=20, disconnected_callback=self._on_disconnect)
-        await self.client.connect()
+        await asyncio.wait_for(self.client.connect(), 30.0)
         self._disconnected.clear()
-        await self.client.start_notify(P.DATA_READ, self._on_data)
+        try:
+            await asyncio.wait_for(self.client.start_notify(P.DATA_READ, self._on_data), 10.0)
+        except BaseException:
+            self._connection_lost("could not subscribe to notifications")
+            raise
         self.address = getattr(dev, "address", self.address)
         log.info("connected to %s %s", getattr(dev, "name", "?"), self.address)
 
@@ -138,15 +144,43 @@ class BleFocusMotor:
         if ev:
             ev.set()
 
+    def _connection_lost(self, why: str) -> None:
+        """The link is dead even if CoreBluetooth hasn't said so: drop it so the next connect starts fresh."""
+        if self._disconnected.is_set():
+            return
+        log.warning("FocusPLUS PRO connection lost (%s); will reconnect", why)
+        self._disconnected.set()
+        client = self.client
+
+        async def _close():
+            try:
+                await asyncio.wait_for(client.disconnect(), 5.0)
+            except Exception as e:
+                log.debug("disconnect after loss: %s", e)
+        try:
+            asyncio.get_running_loop().create_task(_close())
+        except RuntimeError:
+            pass
+
     async def write(self, pkt: bytes) -> None:
         if not self.connected:
             raise ConnectionError("not connected")
         async with self._lock:
+            if not self.connected:
+                raise ConnectionError("not connected")
             t = time.perf_counter()
             try:
-                await self.client.write_gatt_char(P.DATA_WRITE, pkt, response=True)
-            except Exception:
+                # A write with response never completes on a dead link (macOS), and it holds the lock:
+                # bound it so one stale connection can't freeze every later command.
+                await asyncio.wait_for(self.client.write_gatt_char(P.DATA_WRITE, pkt, response=True), WRITE_TIMEOUT_S)
+            except asyncio.TimeoutError:
                 self.state.write_errors += 1
+                self._connection_lost(f"write not acknowledged within {WRITE_TIMEOUT_S:.0f} s")
+                raise ConnectionError("motor not responding (Bluetooth write timed out)") from None
+            except Exception as e:
+                self.state.write_errors += 1
+                if "disconnect" in str(e).lower() or "not connected" in str(e).lower():
+                    self._connection_lost(str(e))
                 raise
             ms = (time.perf_counter() - t) * 1000
             st = self.state
