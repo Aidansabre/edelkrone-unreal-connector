@@ -280,7 +280,7 @@ class Bridge(BridgeControl):
         path = resolve_path(self.log_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         t0 = _t.monotonic()
-        with path.open("w", newline="") as f:
+        with path.open("w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow(["t", "state", "ue_cm", "ue_motor", "target", "motor", "motor_cm", "motor_age_ms"])
             while not self._stop.is_set():

@@ -22,17 +22,17 @@ How to run the focus bridge day to day. **Setting it up from scratch** (install 
 | | |
 |---|---|
 | **Computer** | A Mac or a Windows 10/11 PC with Bluetooth LE. Developed and tested on an Apple Silicon Mac (macOS 27). **Windows is not yet tested on hardware** (see [setup-guide.md](setup-guide.md#2a-windows)). |
-| **Python** | Python 3.11 or newer. On macOS use Homebrew's `python3.13` (the system Python, 3.9, is too old); on Windows use python.org's 3.13. |
+| **Python** | Python 3.11 or newer, including the latest release. On macOS use Homebrew's `python3` (the system Python, 3.9, is too old); on Windows use python.org's. No C++ build tools are needed. |
 | **Motor** | edelkrone **FocusPLUS PRO** ("Lens Controller", Bluetooth name `FocusPsPr`), firmware 0.30 tested. It is controlled **standalone**: no HeadPLUS, no Link Adapter. |
 | **edelkrone app** | **Not needed.** If it's open on any phone, iPad or Mac, quit it: the motor accepts one Bluetooth connection at a time. |
 | **Unreal** | Unreal Engine 5 with the Remote Control API plugin, on the same PC or on another PC on the same network. In a Multi-User session, Multi-User Replication of the camera's focus too. See [unreal-setup.md](unreal-setup.md). |
 
 ## 2. Installation
 
-**Windows:** see [setup-guide.md → 2a](setup-guide.md#2a-windows). In short: install Python 3.13, then
+**Windows:** see [setup-guide.md → 2a](setup-guide.md#2a-windows). In short: install Python 3 (3.11 or newer), then
 
 ```powershell
-py -3.13 -m venv .venv
+py -3 -m venv .venv
 .venv\Scripts\python -m pip install -e .
 copy config.example.yaml config.yaml
 ```
@@ -43,7 +43,7 @@ Set `ble.address: null` in `config.yaml`, then start the bridge with **`Run Brid
 
 ```bash
 cd "Edelkrone Unreal Connector"
-/opt/homebrew/bin/python3.13 -m venv .venv
+"$(brew --prefix)/bin/python3" -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 cp config.example.yaml config.yaml
 ```

@@ -13,7 +13,7 @@ ap = argparse.ArgumentParser(description=__doc__)
 ap.add_argument("csv")
 ap.add_argument("--lens", default="lenses/test-lens.json", help="lens profile used for the distance-error column")
 a = ap.parse_args()
-rows=[r for r in csv.DictReader(open(a.csv))]
+rows=[r for r in csv.DictReader(open(a.csv, encoding="utf-8"))]
 arm=next(float(r["t"]) for r in rows if r["state"]=="ARMED")
 rows=[r for r in rows if r["state"]=="ARMED" and r["ue_motor"] and r["motor"]]
 t=[float(r["t"]) for r in rows]; want=[float(r["ue_motor"]) for r in rows]

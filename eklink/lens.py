@@ -109,17 +109,17 @@ class LensProfile:
         if require_points:
             self.validate()
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        Path(path).write_text(json.dumps(self.to_json(), indent=2) + "\n")
+        Path(path).write_text(json.dumps(self.to_json(), indent=2) + "\n", encoding="utf-8")
 
     @classmethod
     def load_or_new(cls, path: str | Path, name: str) -> "LensProfile":
         """Load without validation (a profile may hold only calibration facts, no marks yet)."""
         p = Path(path)
-        return cls.from_json(json.loads(p.read_text())) if p.exists() else cls(name=name)
+        return cls.from_json(json.loads(p.read_text(encoding="utf-8"))) if p.exists() else cls(name=name)
 
     @classmethod
     def load(cls, path: str | Path) -> "LensProfile":
-        prof = cls.from_json(json.loads(Path(path).read_text()))
+        prof = cls.from_json(json.loads(Path(path).read_text(encoding="utf-8")))
         prof.validate()
         return prof
 

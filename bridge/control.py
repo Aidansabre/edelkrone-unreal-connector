@@ -17,11 +17,10 @@ import time
 from collections import deque
 from pathlib import Path
 
-import yaml
 
 from ekble.lensmap_wizard import fmt_distance, parse_distance
 from eklink.lens import INF, LensProfile
-from tools.common import ROOT, lens_dir, lens_path, resolve_path
+from tools.common import ROOT, dump_yaml, lens_dir, lens_path, resolve_path
 from unreal.camera import PresetBinding
 from unreal.rc_client import RCError
 
@@ -50,7 +49,7 @@ def list_lens_profiles(folder: Path, active: Path | None) -> list[dict]:
                     "direction": None, "near_cm": None, "has_inf": False, "unsaved": True})
     for f in files:
         try:
-            prof = LensProfile.from_json(json.loads(f.read_text()))
+            prof = LensProfile.from_json(json.loads(f.read_text(encoding="utf-8")))
         except Exception as e:
             out.append({"name": f.stem, "error": str(e)})
             continue
@@ -484,7 +483,7 @@ class BridgeControl:
         path = ROOT / "config.yaml"
         header = ("# Written by the ek-bridge web UI (Save as startup default).\n"
                   "# Every option is documented in config.example.yaml.\n")
-        path.write_text(header + yaml.safe_dump(self.cfg, sort_keys=False, allow_unicode=True))
+        path.write_text(header + dump_yaml(self.cfg), encoding="utf-8")
         self.note("settings saved to config.yaml")
 
     async def act_find_cameras(self):

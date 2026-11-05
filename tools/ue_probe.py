@@ -112,7 +112,7 @@ async def cmd_read(rc, cfg, a):
     if a.csv:
         out = Path(a.csv)
         out.parent.mkdir(parents=True, exist_ok=True)
-        with out.open("w", newline="") as f:
+        with out.open("w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
             w.writeheader()
             w.writerows(rows)

@@ -132,7 +132,7 @@ async def run(a) -> None:
             except Exception as e:
                 print(f"abort failed: {e}")
         out = ROOT / "logs" / f"ble-track-{datetime.now():%Y%m%d-%H%M%S}.csv"
-        with out.open("w", newline="") as f:
+        with out.open("w", newline="", encoding="utf-8") as f:
             wr = csv.DictWriter(f, fieldnames=list(m.log[0].keys()))
             wr.writeheader()
             wr.writerows(m.log)

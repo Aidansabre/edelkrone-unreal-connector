@@ -5,14 +5,15 @@ Code structure, how the pieces interact, testing, and how to extend the project.
 ## Setup
 
 ```bash
-/opt/homebrew/bin/python3.13 -m venv .venv
+"$(brew --prefix)/bin/python3" -m venv .venv   # any Python 3.11 or newer
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest            # 58 tests, all offline (no motor, no Unreal)
 ```
 
 | | |
 |---|---|
-| **Dependencies** | `httpx`, `websockets`, `pyyaml`, `pyserial`, `bleak`, `edelkrone` (protocol tables), plus `pytest` and `pytest-asyncio` for development. Python ≥ 3.11. |
+| **Dependencies** | `httpx`, `websockets`, `ruamel.yaml`, `pyserial`, `bleak`, `edelkrone` (protocol tables), plus `pytest` and `pytest-asyncio` for development. Python ≥ 3.11. |
+| **No compiler needed** | Every dependency is pure Python or ships ready-built packages, checked for Python 3.11–3.15 on Windows x64/ARM64/32-bit. `ruamel.yaml` replaces PyYAML for that reason: PyYAML had no Windows package for Python 3.15 and asked for Visual C++. Keep new dependencies to ones with wheels (`pip download --only-binary=:all: --platform win_amd64 --python-version 3.X …` checks this). File I/O always passes `encoding="utf-8"`, since Windows defaults to a legacy code page. |
 | **Licence note** | `edelkrone` (PyPI) is MIT. We import its generated protocol tables, not its high-level API. |
 | **Naming** | Our legacy package is called `eklink`, not `edelkrone`, so it doesn't shadow the PyPI package. |
 

@@ -36,7 +36,7 @@ The other documents go deeper: [user-guide.md](user-guide.md) covers daily opera
 |---|---|
 | edelkrone **FocusPLUS PRO** | Firmware 0.30 tested. Charged, and mounted firmly on the lens: a loose gear slips. |
 | A computer for the bridge, with **Bluetooth LE** | Either the Unreal PC (Windows 10/11) or a Mac. Built-in Bluetooth or a USB Bluetooth 4.0+ adapter. |
-| **Python 3.11+** | Install steps below. |
+| **Python 3.11 or newer** | Any current release; install steps below. No C++ build tools are needed. |
 | **Unreal Engine 5** | With the plugins in step 3. Multi-User Replication needs a recent UE 5 (it has a **Replication** tab in the Multi-User session). |
 | A focus target and a tape measure | For mapping the lens (step 8). |
 | The **edelkrone app closed everywhere** | Phones, tablets, Macs. The motor accepts only one Bluetooth connection. |
@@ -55,7 +55,10 @@ Pick one. The steps below mark the parts that only apply to one of them.
 ## 2. Install the bridge
 
 ### 2a. Windows
-1. **Install Python 3.13** from [python.org](https://www.python.org/downloads/windows/). In the installer, tick **Add python.exe to PATH** and keep the **py launcher** option. Alternatively run `winget install Python.Python.3.13`.
+1. **Install Python 3** from [python.org](https://www.python.org/downloads/windows/). Any version from **3.11** up works, including the latest; 64-bit is recommended.
+   - In the installer, tick **Add python.exe to PATH** and keep the **py launcher** option.
+   - Or run `winget install Python.Python.3.15` (or whichever version is current).
+   - The bridge's dependencies are pure Python or come ready-built for Windows, so you **don't need Visual C++ build tools**. If pip ever asks for "Microsoft Visual C++ 14.0", that Python is newer than one of the packages supports yet: install the previous Python version alongside it and use `py -3.14` (for example) instead of `py -3` below.
 2. **Get the code:**
    - With Git:
      ```powershell
@@ -64,7 +67,7 @@ Pick one. The steps below mark the parts that only apply to one of them.
    - Or, on [the GitHub page](https://github.com/Aidansabre/edelkrone-unreal-connector), use **Code → Download ZIP** and unzip it.
 3. **Install**, in PowerShell inside the project folder:
    ```powershell
-   py -3.13 -m venv .venv
+   py -3 -m venv .venv
    .venv\Scripts\python -m pip install -e .
    copy config.example.yaml config.yaml
    ```
@@ -79,12 +82,12 @@ Pick one. The steps below mark the parts that only apply to one of them.
 6. **Start:** double-click **`Run Bridge.bat`**. A console window shows the bridge, and the browser opens **http://127.0.0.1:8766**. Close the window, or press Ctrl+C, to stop the bridge; that also stops the motor.
 
 ### 2b. macOS
-1. **Install Python** with [Homebrew](https://brew.sh): `brew install python@3.13`. The system Python, 3.9, is too old.
+1. **Install Python** with [Homebrew](https://brew.sh): `brew install python`. Any version from 3.11 up works; the macOS system Python (3.9) is too old.
 2. **Get the code and install:**
    ```bash
    git clone https://github.com/Aidansabre/edelkrone-unreal-connector.git
    cd edelkrone-unreal-connector
-   /opt/homebrew/bin/python3.13 -m venv .venv
+   "$(brew --prefix)/bin/python3" -m venv .venv
    .venv/bin/pip install -e .
    cp config.example.yaml config.yaml
    ```
@@ -232,7 +235,7 @@ The numbers are in [performance.md](performance.md).
 
 | ✓ | Where | Item |
 |---|---|---|
-| ☐ | Bridge computer | Python 3.11+, bridge installed, `config.yaml` created (`ble.address: null` on Windows) |
+| ☐ | Bridge computer | Python 3.11 or newer, bridge installed, `config.yaml` created (`ble.address: null` on Windows) |
 | ☐ | Bridge computer | `ek-ble scan` lists `FocusPsPr`; the edelkrone app is closed everywhere |
 | ☐ | Editor A | Remote Control API plugin; WebSocket 30020 auto-start; bind address set (`0.0.0.0` if remote) |
 | ☐ | Editor A | "Use Less CPU when in Background" off; firewall TCP 30020 if remote |

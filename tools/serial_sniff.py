@@ -55,7 +55,7 @@ def main(argv=None) -> None:
 
     # Note: opening a CDC port may toggle DTR; we leave the line settings at their defaults
     # and never write.
-    with serial.Serial(port, a.baud, timeout=0.005) as s, log_path.open("a") as log:
+    with serial.Serial(port, a.baud, timeout=0.005) as s, log_path.open("a", encoding="utf-8") as log:
         t0 = time.monotonic()
         burst = bytearray()
         last_rx = 0.0

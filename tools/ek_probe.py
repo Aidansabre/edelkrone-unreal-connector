@@ -268,7 +268,7 @@ async def cmd_sweep(c, link, a):
     finally:
         await status_client.aclose()
         await c.abort(link)
-    with out.open("w", newline="") as f:
+    with out.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
         w.writerows(rows)
@@ -323,7 +323,7 @@ Lens mapping - put a focus chart at measured distances (or use barrel witness ma
 async def cmd_lens_map(c, link, a):
     path = resolve_path(a.out) if a.out else ROOT / "lenses" / f"{a.name}.json"
     if path.exists():
-        prof = LensProfile.from_json(json.loads(path.read_text()))
+        prof = LensProfile.from_json(json.loads(path.read_text(encoding="utf-8")))
         print(f"Loaded existing profile {path} ({len(prof.points)} points)")
     else:
         prof = LensProfile(name=a.name, notes=a.notes or "")

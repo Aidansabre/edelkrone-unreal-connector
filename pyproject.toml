@@ -2,13 +2,13 @@
 name = "edelkrone-unreal-connector"
 version = "0.1.0"
 description = "Drive an edelkrone FocusPLUS PRO focus motor from an Unreal Engine CineCamera, and back"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
   "httpx>=0.27",
   "websockets>=12",
-  "pyyaml>=6",
+  "ruamel.yaml>=0.18",
   "pyserial>=3.5",
   "edelkrone>=0.1.1",
   "bleak>=0.22",

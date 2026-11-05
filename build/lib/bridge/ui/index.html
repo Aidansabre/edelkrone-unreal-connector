@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edelkrone Focus Bridge</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1d2026; --line: #2c313a;
+    --text: #e6e9ef; --dim: #8b94a3; --accent: #4da3ff;
+    --ok: #46d17f; --warn: #ffb454; --bad: #ff6b6b; --ue: #c792ea;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 16px; max-width: 1100px; margin-inline: auto;
+  }
+  h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em;
+       color: var(--dim); margin: 0 0 12px; font-weight: 600; }
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .row:last-child { margin-bottom: 0; }
+  label.name { width: 110px; flex: none; color: var(--dim); font-size: 13px; }
+  input[type=range] { flex: 1; accent-color: var(--accent); height: 28px; min-width: 120px; }
+  input[type=number], input[type=text], input[type=password], select {
+    background: #12141a; color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 9px; font: inherit; font-variant-numeric: tabular-nums;
+  }
+  input[type=number] { width: 96px; text-align: right; }
+  button {
+    background: #2a2f38; color: var(--text); border: 1px solid var(--line);
+    border-radius: 7px; padding: 8px 13px; font: inherit; cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: #333944; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #07182b; font-weight: 600; }
+  button.danger { background: #3a1f22; border-color: #6b2c31; color: #ffb3b3; }
+  button.big { font-size: 17px; padding: 12px 22px; min-width: 150px; }
+  button.armed { background: var(--bad); border-color: var(--bad); color: #2a0707; font-weight: 700; }
+  button.small { padding: 4px 9px; font-size: 13px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; }
+  .seg button.on { background: var(--accent); color: #07182b; font-weight: 600; }
+  .status { display: flex; gap: 8px 22px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--dim); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; background: var(--dim); }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 99px; font-weight: 700; font-size: 13px;
+          letter-spacing: .04em; background: #2a2f38; color: var(--text); }
+  .pill.ok { background: #183d29; color: var(--ok); } .pill.warn { background: #3d3018; color: var(--warn); }
+  .pill.bad { background: #3d1a1d; color: var(--bad); } .pill.armed { background: var(--bad); color: #2a0707; }
+  .hint { color: var(--dim); font-size: 12.5px; margin-top: 10px; }
+  .err { color: var(--bad); font-size: 13px; min-height: 18px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  @media (max-width: 760px) { .grid2, .grid3 { grid-template-columns: 1fr; } label.name { width: 90px; } }
+  .big-num { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cap { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+  .stat { background: #171a1f; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  canvas { width: 100%; display: block; background: #12141a; border: 1px solid var(--line); border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-weight: 500; color: var(--dim); font-size: 12px; padding: 4px 8px; }
+  td { padding: 5px 8px; font-size: 14px; border-top: 1px solid var(--line); }
+  td.num { text-align: right; } th.num { text-align: right; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr 1fr; } }
+  .step { background: #171a1f; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+  .step b { display: block; font-size: 12px; color: var(--dim); font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+  .step.ok { border-color: #2a6b46; } .step.ok span::before { content: "✓ "; color: var(--ok); }
+  .step.todo { border-color: #6b5524; } .step.todo span::before { content: "• "; color: var(--warn); }
+  .log { font: 12px/1.45 ui-monospace, Menlo, monospace; color: var(--dim); max-height: 140px; overflow: auto; }
+  .log .error { color: var(--bad); } .log .warn { color: var(--warn); }
+  .legend { font-size: 12px; color: var(--dim); display: flex; gap: 14px; margin-top: 6px; }
+  .legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 5px; border-radius: 2px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 10; }
+  .modal { background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; padding: 22px; max-width: 460px; }
+  .modal p { margin: 0 0 16px; font-size: 16px; }
+  .disabled-box { opacity: .5; pointer-events: none; }
+  .tip { position: fixed; z-index: 20; max-width: 340px; background: #0b0d11; color: var(--text);
+         border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px;
+         padding: 8px 10px; font-size: 12.5px; line-height: 1.45; box-shadow: 0 6px 20px rgba(0,0,0,.5);
+         pointer-events: none; opacity: 0; transition: opacity .12s; }
+  .tip.on { opacity: 1; }
+  button.off { opacity: .45; cursor: default; }
+  button.primary.off:hover { background: var(--accent); }
+  kbd { background: #2a2f38; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <div class="row" style="justify-content:space-between">
+    <h1>Edelkrone Focus Bridge</h1>
+    <span id="statepill" class="pill" data-tip="Bridge state. READY: can arm. ARMED: following. NEEDS CALIBRATION: find the end stops first. NEEDS LENS MAP: mark distances. LENS MISMATCH: the lens doesn't match its map (different lens?). NOT CONNECTED: no Bluetooth link to the motor.">…</span>
+  </div>
+  <div class="status">
+    <span data-tip="Bluetooth link to the FocusPLUS PRO: firmware, battery and how long one command takes (~70 ms is normal). Red: not connected. Is the motor on, and is the edelkrone app closed? The motor accepts one connection."><span id="mdot" class="dot"></span><span id="mtext">motor</span></span>
+    <span data-tip="Remote Control connection to Unreal, and how long one focus read takes there and back (~20 ms on a LAN). Yellow: connected but no value from the camera. Red: not connected (host, port, firewall, plugin)."><span id="udot" class="dot"></span><span id="utext">Unreal</span></span>
+    <span data-tip="The active lens profile (lenses/&lt;name&gt;.json): its end stops, direction, slip reference and distance map.">lens <b id="lensname" style="color:var(--text)">–</b></span>
+  </div>
+  <div class="err" id="problem"></div>
+  <div class="err" id="error"></div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <button id="arm" class="big primary" data-tip="Start following (space bar). While armed the lens moves by itself. Possible once the motor is calibrated, the lens is mapped and Unreal sends a value; otherwise the reason shows below. DISARM stops sending targets.">ARM</button>
+    <button id="stop" class="danger" data-tip="Disarm and stop the motor immediately.">Stop</button>
+    <div class="seg" id="modeseg">
+      <button data-mode="both" data-tip="Default. Unreal drives the lens until you turn the lens by hand. Then the lens leads and Unreal's Manual Focus Distance follows it. Unreal takes over again as soon as its focus is changed there (Details panel, Sequencer) or with 'Give focus back to Unreal'. The lens can only lead with the camera's focus method on Manual.">Both ways</button>
+      <button data-mode="ue_drives" data-tip="Unreal drives the lens: the focus Unreal renders (Sequencer, Details panel, Tracking). If the lens is turned by hand, it goes back to Unreal's focus when you let go.">Unreal → lens</button>
+      <button data-mode="wheel_drives" data-tip="The lens drives Unreal: its position is written into the camera's Manual Focus Distance, and the motor is never driven. Needs focus method Manual and no Sequencer focus track playing.">Lens → Unreal</button>
+    </div>
+    <span id="leader" class="pill" style="display:none" data-tip="Who drives the focus right now (Both ways). Unreal leads: the lens follows Unreal. Lens leads: you turned the lens, and Unreal follows it."></span>
+    <button id="giveback" style="display:none" data-tip="Let Unreal drive again. The lens moves to Unreal's current focus.">Give focus back to Unreal</button>
+    <span class="hint" style="margin:0"><kbd>space</kbd> arm/disarm</span>
+  </div>
+  <div class="hint" id="whynot"></div>
+  <div class="grid3" style="margin-top:12px">
+    <div class="stat" data-tip="The focus distance Unreal renders (the CineCamera's Current Focus Distance, including Unreal's focus smoothing), and where that is on this lens in % of travel, from the distance map."><div class="cap">Unreal focus</div><div class="big-num" id="ue_cm">–</div><div class="hint" style="margin:0" id="ue_pct"></div></div>
+    <div class="stat" data-tip="The target sent to the motor: Unreal's value pushed ahead by the lead to hide the motor's ~270 ms lag, and limited to the max speed. '–' when not armed or while the lens leads."><div class="cap">Command</div><div class="big-num" id="target">–</div><div class="hint" style="margin:0" id="lead"></div></div>
+    <div class="stat" data-tip="Where the lens actually is, as the motor reports it: % of travel (0 % = closest focus) and the distance that is on the map."><div class="cap">Lens</div><div class="big-num" id="motor">–</div><div class="hint" style="margin:0" id="motor_cm"></div></div>
+  </div>
+  <canvas id="chart" height="170" style="margin-top:12px" data-tip="The last 15 s in % of lens travel. Purple: Unreal (mapped to this lens). Blue: command sent (with lead). Green: lens position. Green on top of purple means the real lens matches Unreal."></canvas>
+  <div class="legend"><span><i style="background:var(--ue)"></i>Unreal (mapped)</span>
+    <span><i style="background:var(--accent)"></i>command (with lead)</span>
+    <span><i style="background:var(--ok)"></i>lens position</span><span>last 15 s, % of lens travel</span></div>
+</div>
+
+<div class="panel">
+  <h2>Setup</h2>
+  <div class="steps">
+    <div class="step" id="st_motor" data-tip="Bluetooth connection to the motor."><b>Motor</b><span>–</span></div>
+    <div class="step" id="st_lens" data-tip="A lens profile must be selected or created below."><b>Lens profile</b><span>–</span></div>
+    <div class="step" id="st_cal" data-tip="The motor knows this lens's end stops and which end is closest focus. Lost at every motor power-off."><b>Calibration</b><span>–</span></div>
+    <div class="step" id="st_map" data-tip="At least 2 marks (better 5–10 plus infinity) to convert distances into lens positions."><b>Distance map</b><span>–</span></div>
+  </div>
+  <div class="grid2">
+    <div>
+      <h2>Lens</h2>
+      <div class="row">
+        <select id="lenssel" style="flex:1;min-width:0" data-tip="Saved lens profiles, and whether each is calibrated and mapped."></select>
+        <button id="uselens" data-tip="Switch to the selected lens. Calibrate afterwards: the end stops differ per lens.">Use</button>
+      </div>
+      <div class="row">
+        <input type="text" id="newlens" data-tip="Name for a new lens profile, e.g. sigma-24-70." placeholder="new lens name, e.g. sigma-24-70" style="flex:1;min-width:0">
+        <button id="createlens" data-tip="Create and select a new, empty lens profile. Then calibrate and map it.">Create</button>
+      </div>
+      <div class="hint">Each lens has its own end-stop direction, slip reference and distance map.
+        After changing lenses: mount the motor firmly, select the lens, Calibrate.</div>
+    </div>
+    <div>
+      <h2>Calibration</h2>
+      <div class="row">
+        <button id="calibrate" class="primary" data-tip="Drives the lens to both end stops (~10–15 s), sets 0 % = closest focus and checks the gear for slip against this lens's reference. Needed after every motor power-on and lens change. Disarm first.">Calibrate</button>
+        <label style="font-size:13px;color:var(--dim)" data-tip="On: at the end stop you confirm whether the lens is at closest focus or infinity, every time. Off: the answer stored for this lens is reused, and you're only asked the first time."><input type="checkbox" id="askdir" checked> ask which end is closest focus</label>
+      </div>
+      <div class="row" id="sliprow" style="display:none">
+        <button id="acceptspan" class="danger" data-tip="Only if you remounted the motor on purpose: the encoder span changed, so store it as this lens's new slip reference and calibrate again.">Accept new mount &amp; recalibrate</button>
+      </div>
+      <div class="hint" id="calinfo">Drives the lens to both end stops (~10–15 s), sets 0 % = closest focus
+        and checks the gear for slip. Needed after every motor power-on and every lens change.</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel" id="mappanel">
+  <h2>Distance map <span id="mapdirty" style="color:var(--warn);text-transform:none;letter-spacing:0"></span></h2>
+  <div class="grid2">
+    <div>
+      <div class="row">
+        <div class="stat" style="flex:1" data-tip="Current lens position (% of travel, 0 % = closest focus) and the distance the map gives for it."><div class="cap">Position</div>
+          <div class="big-num" id="mpos">–</div><div class="hint" style="margin:0" id="mposcm"></div></div>
+      </div>
+      <div class="row" data-tip="Move the lens by this many % of travel. Keyboard: ← → 0.2 %, with shift 2 %.">
+        <button class="jog" data-d="-5">−5</button><button class="jog" data-d="-1">−1</button>
+        <button class="jog" data-d="-0.2">−0.2</button><button class="jog" data-d="0.2">+0.2</button>
+        <button class="jog" data-d="1">+1</button><button class="jog" data-d="5">+5</button>
+        <span class="hint" style="margin:0"><kbd>←</kbd><kbd>→</kbd> 0.2 · <kbd>shift</kbd> 2</span>
+      </div>
+      <div class="row">
+        <input type="range" id="slider" min="0" max="100" step="0.1" data-tip="Drag to move the lens to a position (% of travel).">
+        <input type="number" id="gotopct" min="0" max="100" step="0.1" placeholder="%" data-tip="Exact position to move to, in % of travel.">
+        <button id="goto" data-tip="Move the lens to the position typed on the left.">Go</button>
+      </div>
+      <div class="row">
+        <input type="text" id="markdist" data-tip="Distance of the target you are focused on: 1.5 (metres), 120cm, 4ft or inf." placeholder="distance: 1.5 · 120cm · 4ft" style="flex:1;min-width:0">
+        <button id="mark" class="primary" data-tip="Store the current lens position for this distance (Enter works too).">Mark</button>
+        <button id="markinf" data-tip="Store the current position as infinity: where distant objects are sharp. The end stop is often past it.">Mark infinity</button>
+      </div>
+      <div class="hint">Put a target at a measured distance, focus on it while watching the monitor, type the
+        distance and Mark. Mark closest focus, infinity <i>where far objects are sharp</i> (the end stop is often
+        past it), and 5–10 distances in between.</div>
+    </div>
+    <div>
+      <canvas id="mapchart" height="170" data-tip="The distance map: x = % of lens travel, y = 1/distance (infinity at the bottom). Green line: the lens now. Red zones: outside the outermost marks. Targets there are clamped to the nearest mark."></canvas>
+      <div class="legend"><span>x: % of lens travel · y: 1/distance (∞ at the bottom)</span></div>
+      <table style="margin-top:8px" data-tip="Your marks. 'go' moves the lens there, ✕ deletes the mark (until you save)."><thead><tr><th>distance</th><th class="num">%</th><th></th></tr></thead>
+        <tbody id="marks"></tbody></table>
+      <div class="row" style="margin-top:10px">
+        <button id="savemap" class="primary" data-tip="Write the marks to the lens profile. Unsaved marks are lost on restart.">Save map</button>
+        <button id="discardmap" data-tip="Throw away unsaved marks and go back to the saved map.">Discard changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="grid2">
+  <div class="panel">
+    <h2>Unreal</h2>
+    <div class="row" data-tip="IP address or name of the PC running Unreal, and its Remote Control WebSocket port (Project Settings → Remote Control, default 30020). Changing it reconnects."><label class="name">Host</label>
+      <input type="text" data-set="unreal_host" style="flex:1;min-width:0">
+      <input type="number" data-set="unreal_port" data-int="1" style="width:90px"></div>
+    <div class="row" data-tip="Only needed if Unreal enforces a Remote Control passphrase for remote clients."><label class="name">Passphrase</label>
+      <input type="password" data-set="unreal_passphrase" style="flex:1;min-width:0" placeholder="(none)"></div>
+    <div class="row" data-tip="The Remote Control preset that exposes the camera's focus (Manual and/or Current Focus Distance) and, optionally, the feedback variables. Leave empty to use the first preset that exposes a CineCamera's focus."><label class="name">Preset</label>
+      <input type="text" data-set="unreal_preset" style="flex:1;min-width:0" placeholder="auto-detect (Remote Control preset with the camera's focus)"></div>
+    <div class="row" data-tip="An explicit CineCameraComponent object path. Overrides the preset; usually left empty."><label class="name">Camera</label>
+      <input type="text" data-set="camera_path" style="flex:1;min-width:0" placeholder="from the preset"></div>
+    <div class="row" data-tip="Find lists the cameras exposed in presets (and the level's cameras, if Unreal allows listing them). Pick one to set the camera path."><label class="name"></label>
+      <select id="cameras" style="flex:1;min-width:0"><option value="">— find cameras —</option></select>
+      <button id="findcams">Find</button></div>
+    <div class="row" data-tip="Write the lens distance, position and bridge state to a BP_EdelkroneFeedback actor in the level, about 10 times a second, e.g. for an on-screen readout."><label class="name">Feedback</label>
+      <label style="font-size:13px"><input type="checkbox" data-set="feedback_enabled"> write lens position to BP_EdelkroneFeedback</label></div>
+    <div class="hint" id="ueinfo" data-tip="How the bridge reaches the camera: through a preset, a path or discovery, and whether the feedback actor was found."></div>
+  </div>
+  <div class="panel">
+    <h2>Motion</h2>
+    <div class="row" data-tip="How far ahead of Unreal the motor is commanded, to hide its ~270 ms lag. More lead means less lag on smooth pulls but more overshoot where a pull stops or reverses. Default 270 ms."><label class="name">Lead (ms)</label>
+      <input type="range" min="0" max="600" step="10" data-set="lead_ms" data-int="1">
+      <input type="number" min="0" max="1000" step="10" data-set="lead_ms" data-int="1"></div>
+    <div class="row" data-tip="The fastest the bridge drives the lens, in % of travel per second. The motor manages about 60 %/s; pulls faster than this limit trail behind."><label class="name">Max speed %/s</label>
+      <input type="range" min="5" max="60" step="1" data-set="max_speed_pct_s">
+      <input type="number" min="1" max="100" step="1" data-set="max_speed_pct_s"></div>
+    <div class="row" data-tip="If Unreal sends no fresh focus value for this long, the lens holds where it is, and you can't arm."><label class="name">Unreal timeout s</label>
+      <input type="number" min="0.2" max="10" step="0.1" data-set="ue_timeout_s"></div>
+    <div class="row" style="margin-top:14px"><button id="savecfg" data-tip="Write the current settings to config.yaml, so the bridge starts with them next time.">Save as startup default</button></div>
+    <div class="hint">Lead hides the motor's ~270 ms lag; more lead overshoots where a pull reverses.
+      Changes apply immediately; Save keeps them for the next start (config.yaml).</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2 data-tip="Recent events, newest first: arming, takeovers, calibration, refusals.">Log</h2>
+  <div class="log" id="log"></div>
+</div>
+
+<div class="modal-bg" id="modalbg"><div class="modal">
+  <p id="qtext"></p>
+  <div class="row" id="qbuttons"></div>
+  <div class="hint">Look at the lens / focus scale. This is asked once per lens and remembered.</div>
+</div></div>
+
+<script>
+(function () {
+  "use strict";
+  var S = null, editing = null, timer = null, dirty = {}, history = [], lastPoll = 0;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function showError(msg) { $("error").textContent = msg || ""; }
+
+  function post(action, body) {
+    return fetch("/api/" + action, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {})
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      showError(d.error || "");
+      if (d.state) render(d.state);
+      return d;
+    }).catch(function (e) { showError(String(e)); });
+  }
+
+  // Coalesce slider drags into at most one settings request per 80 ms.
+  function queueSetting(key, value) {
+    dirty[key] = value;
+    if (timer) return;
+    timer = setTimeout(function () { var p = dirty; dirty = {}; timer = null; post("settings", p); }, 80);
+  }
+
+  function fmt(v, unit, nd) {
+    if (v === null || v === undefined) return "–";
+    return Number(v).toFixed(nd === undefined ? 1 : nd) + (unit || "");
+  }
+  function fmtCm(cm) {
+    if (cm === null || cm === undefined) return "–";
+    if (cm >= 50000) return "∞";
+    return cm >= 100 ? (cm / 100).toFixed(2) + " m" : cm.toFixed(0) + " cm";
+  }
+  function stepState(id, ok, text) { var el = $(id); el.className = "step " + (ok ? "ok" : "todo"); el.querySelector("span").textContent = text; }
+
+  // ---------------------------------------------------------------- rendering
+  function render(s) {
+    S = s;
+    var pill = $("statepill");
+    pill.textContent = s.busy ? s.busy.toUpperCase() : s.state.replace(/_/g, " ");
+    pill.className = "pill " + (s.armed ? "armed" : s.state === "READY" ? "ok" :
+      (s.state.indexOf("NEEDS") === 0 || s.busy) ? "warn" : "bad");
+
+    var m = s.motor, u = s.ue;
+    $("mdot").className = "dot " + (m.connected ? (m.lens_ends_known && m.direction_known ? "ok" : "warn") : "bad");
+    $("mtext").textContent = m.connected
+      ? "motor fw " + (m.firmware || "?") + (m.battery !== null ? " · battery " + m.battery.toFixed(0) + "%" : "") +
+        (m.write_ms ? " · " + m.write_ms + " ms/cmd" : "")
+      : "motor not connected (power on? edelkrone app closed?)";
+    var ueOk = u.connected && u.age_ms !== null && u.age_ms < 1000;
+    $("udot").className = "dot " + (ueOk ? "ok" : u.connected ? "warn" : "bad");
+    $("utext").textContent = "Unreal " + u.host + ":" + u.port + (u.connected ? (u.age_ms !== null && u.age_ms < 5000 ? " · " + u.rtt_ms + " ms" : " · no camera value") : " · not connected");
+    $("lensname").textContent = s.lens.active || "none";
+    $("problem").textContent = "";  // shown once, next to the ARM button
+
+    var arm = $("arm");
+    arm.textContent = s.armed ? "DISARM" : "ARM";
+    arm.className = "big " + (s.armed ? "armed" : "primary") + (!s.armed && !s.can_arm ? " off" : "");
+    var why = s.problem && s.state !== "READY" ? s.problem : (s.why_not || "");
+    $("whynot").textContent = (!s.armed && !s.can_arm && why) ? "Can't arm yet: " + why : "";
+    document.querySelectorAll("#modeseg button").forEach(function (b) { b.classList.toggle("on", b.dataset.mode === s.mode); });
+    var both = s.armed && s.mode === "both", lensLeads = both && s.leader === "lens";
+    $("leader").style.display = both ? "" : "none";
+    $("leader").textContent = lensLeads ? "lens leads" : "Unreal leads";
+    $("leader").className = "pill " + (lensLeads ? "warn" : "ok");
+    $("giveback").style.display = lensLeads ? "" : "none";
+
+    var L = s.live;
+    $("ue_cm").textContent = fmtCm(L.ue_cm);
+    $("ue_pct").textContent = L.ue_pct !== null ? "→ " + fmt(L.ue_pct, " %", 1) + " on this lens" : "";
+    $("target").textContent = s.armed ? fmt(L.target_pct, " %", 1) : "–";
+    $("lead").textContent = "lead " + s.lead_ms + " ms";
+    $("motor").textContent = fmt(L.motor_pct, " %", 1);
+    $("motor_cm").textContent = L.motor_cm !== null ? fmtCm(L.motor_cm) : "";
+
+    // setup steps
+    stepState("st_motor", m.connected, m.connected ? "connected" : "not connected");
+    stepState("st_lens", !!s.lens.active, s.lens.active || "select or create");
+    var calOk = m.lens_ends_known && m.direction_known && s.state !== "NEEDS_CALIBRATION";
+    stepState("st_cal", calOk, s.busy === "calibrating" ? "running…" : calOk ? "done" : "needed");
+    var nm = s.lens.marks.length;
+    var hasInf = s.lens.marks.some(function (x) { return x.distance === "inf"; });
+    stepState("st_map", nm >= 2, nm >= 2 ? nm + " marks" + (hasInf ? " incl. ∞" : " (no ∞)") : "needs ≥ 2 marks");
+
+    // lens list
+    var sel = $("lenssel"), joined = JSON.stringify(s.lens.list);
+    if (sel.dataset.joined !== joined) {
+      sel.dataset.joined = joined; sel.innerHTML = "";
+      s.lens.list.forEach(function (l) {
+        var o = document.createElement("option");
+        o.value = l.name;
+        o.textContent = l.name + (l.active ? " (active)" : "") + " — " + (l.unsaved ? "new" :
+          (l.calibrated ? "calibrated" : "not calibrated") + ", " + (l.marks >= 2 ? l.marks + " marks" : "no map"));
+        if (l.active) o.selected = true;
+        sel.appendChild(o);
+      });
+    }
+
+    // calibration info
+    var c = s.calibration.last;
+    $("sliprow").style.display = s.calibration.slip_pending ? "" : "none";
+    if (c) {
+      $("calinfo").textContent = c.ok
+        ? "Last calibration OK" + (c.span_deviation !== null && c.span_deviation !== undefined ? " · slip check " + (c.span_deviation * 100).toFixed(2) + " % off" : " · slip reference stored") +
+          (c.flipped ? " · direction flipped" : "")
+        : "Last calibration failed: " + c.error;
+    }
+    var idle = !s.armed && !s.busy;
+    $("calibrate").classList.toggle("off", !idle || !m.connected || !s.lens.active);
+    $("mappanel").classList.toggle("disabled-box", !idle || !m.connected || !m.lens_ends_known);
+
+    // map panel
+    $("mpos").textContent = fmt(m.pct, " %", 2);
+    $("mposcm").textContent = m.cm !== null ? "≈ " + fmtCm(m.cm) + " (from the map)" : "";
+    if (document.activeElement !== $("slider") && m.pct !== null) $("slider").value = m.pct;
+    $("mapdirty").textContent = s.lens.map_dirty ? "· unsaved changes" : "";
+    var mk = $("marks"), mj = JSON.stringify(s.lens.marks);
+    if (mk.dataset.joined !== mj) {
+      mk.dataset.joined = mj; mk.innerHTML = "";
+      s.lens.marks.forEach(function (x) {
+        var tr = document.createElement("tr");
+        tr.innerHTML = "<td>" + x.label + "</td><td class='num'>" + x.pct.toFixed(2) + "</td>" +
+          "<td class='num'><button class='small' data-go='" + x.distance + "'>go</button> " +
+          "<button class='small' data-del='" + x.distance + "'>✕</button></td>";
+        mk.appendChild(tr);
+      });
+    }
+    drawMap(s);
+
+    // settings (never overwrite the field being edited)
+    document.querySelectorAll("[data-set]").forEach(function (el) {
+      if (el === editing || el === document.activeElement) return;
+      var v = s.settings[el.dataset.set];
+      if (v === undefined || v === null) v = "";
+      if (el.type === "checkbox") el.checked = !!v; else el.value = v;
+    });
+    var info = "";
+    if (u.camera) {
+      info = "camera: " + u.camera.split(":").pop();
+      if (u.source === "preset") info += " · via preset " + u.preset;
+      else if (u.source === "path") info += " · set by path";
+      if (u.source === "preset" && u.focus_via !== "preset")
+        info += " · focus read from the camera directly (expose Current Focus Distance in the preset to go through it)";
+      info += u.feedback_actor ? " · feedback: " + u.feedback_actor.split(".").pop() : " · no feedback actor";
+    } else if (u.last_error) info = "last error: " + u.last_error;
+    $("ueinfo").textContent = info;
+
+    // question dialog
+    var q = s.question, bg = $("modalbg");
+    if (q) {
+      if (bg.dataset.qid !== String(q.id)) {
+        bg.dataset.qid = q.id; $("qtext").textContent = q.text.replace(/\s*\[m\/i\]\s*$/, "");
+        var qb = $("qbuttons"); qb.innerHTML = "";
+        q.options.forEach(function (o) {
+          var b = document.createElement("button"); b.className = "big primary"; b.textContent = o.label;
+          b.onclick = function () { post("answer", { id: q.id, answer: o.value }); };
+          qb.appendChild(b);
+        });
+      }
+      bg.style.display = "flex";
+    } else { bg.style.display = "none"; bg.dataset.qid = ""; }
+
+    // log
+    var lg = $("log"), lj = s.events.length ? s.events[s.events.length - 1].t + "|" + s.events.length : "";
+    if (lg.dataset.j !== lj) {
+      lg.dataset.j = lj; lg.innerHTML = "";
+      s.events.slice().reverse().forEach(function (e) {
+        var d = document.createElement("div"); d.className = e.level;
+        d.textContent = new Date(e.t * 1000).toLocaleTimeString() + "  " + e.msg; lg.appendChild(d);
+      });
+    }
+
+    // history for the live chart
+    history.push({ t: s.time, ue: L.ue_pct, cmd: s.armed ? L.target_pct : null, mo: L.motor_pct });
+    while (history.length && history[0].t < s.time - 15) history.shift();
+    drawChart();
+  }
+
+  // ---------------------------------------------------------------- charts (plain canvas)
+  function prep(cv) {
+    var r = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight || cv.height;
+    if (cv.width !== Math.round(w * r)) { cv.width = Math.round(w * r); cv.height = Math.round(h * r); }
+    var g = cv.getContext("2d"); g.setTransform(r, 0, 0, r, 0, 0); g.clearRect(0, 0, w, h);
+    return { g: g, w: w, h: h };
+  }
+  function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+  function drawChart() {
+    var c = prep($("chart")), g = c.g, w = c.w, h = c.h, pad = 26;
+    if (!history.length) return;
+    var t1 = history[history.length - 1].t, t0 = t1 - 15;
+    g.strokeStyle = css("--line"); g.fillStyle = css("--dim"); g.font = "11px system-ui"; g.lineWidth = 1;
+    [0, 25, 50, 75, 100].forEach(function (p) {
+      var y = h - 6 - (h - 12) * p / 100;
+      g.beginPath(); g.moveTo(pad, y); g.lineTo(w - 4, y); g.stroke(); g.fillText(p, 2, y + 4);
+    });
+    function line(key, color) {
+      g.strokeStyle = color; g.lineWidth = 2; g.beginPath(); var on = false;
+      history.forEach(function (p) {
+        var v = p[key]; if (v === null || v === undefined) { on = false; return; }
+        var x = pad + (w - pad - 4) * (p.t - t0) / 15, y = h - 6 - (h - 12) * v / 100;
+        if (on) g.lineTo(x, y); else { g.moveTo(x, y); on = true; }
+      });
+      g.stroke();
+    }
+    line("ue", css("--ue")); line("cmd", css("--accent")); line("mo", css("--ok"));
+  }
+
+  function drawMap(s) {
+    var c = prep($("mapchart")), g = c.g, w = c.w, h = c.h, pad = 8;
+    var pts = s.lens.marks.map(function (x) { return { p: x.pct, d: x.distance === "inf" ? 0 : 1 / x.distance, inf: x.distance === "inf" }; });
+    var dmax = Math.max.apply(null, pts.map(function (q) { return q.d; }).concat([2]));
+    function X(p) { return pad + (w - 2 * pad) * p / 100; }
+    function Y(d) { return h - pad - (h - 2 * pad) * d / dmax; }
+    g.strokeStyle = css("--line"); g.lineWidth = 1;
+    [0, 25, 50, 75, 100].forEach(function (p) { g.beginPath(); g.moveTo(X(p), pad); g.lineTo(X(p), h - pad); g.stroke(); });
+    pts.sort(function (a, b) { return a.p - b.p; });
+    g.strokeStyle = css("--accent"); g.lineWidth = 2; g.beginPath();
+    pts.forEach(function (q, i) { if (i) g.lineTo(X(q.p), Y(q.d)); else g.moveTo(X(q.p), Y(q.d)); }); g.stroke();
+    pts.forEach(function (q) { g.fillStyle = q.inf ? css("--ue") : css("--accent"); g.beginPath(); g.arc(X(q.p), Y(q.d), 4, 0, 7); g.fill(); });
+    if (s.motor.pct !== null) {
+      g.strokeStyle = css("--ok"); g.lineWidth = 2; g.beginPath(); g.moveTo(X(s.motor.pct), pad); g.lineTo(X(s.motor.pct), h - pad); g.stroke();
+    }
+    if (s.lens.range_pct) {
+      g.fillStyle = "rgba(255,107,107,.12)";
+      g.fillRect(X(s.lens.range_pct[1]), pad, X(100) - X(s.lens.range_pct[1]), h - 2 * pad);
+      g.fillRect(X(0), pad, X(s.lens.range_pct[0]) - X(0), h - 2 * pad);
+    }
+  }
+
+  // ---------------------------------------------------------------- controls
+  // ARM/Calibrate are greyed out with a class, not `disabled`: disabled buttons get no hover, so no explanation.
+  $("arm").onclick = function () { if (!$("arm").classList.contains("off")) post("toggle-arm"); };
+  $("stop").onclick = function () { post("stop"); };
+  document.querySelectorAll("#modeseg button").forEach(function (b) { b.onclick = function () { post("mode", { mode: b.dataset.mode }); }; });
+  $("giveback").onclick = function () { post("lead", { leader: "unreal" }); };
+  $("calibrate").onclick = function () {
+    if ($("calibrate").classList.contains("off")) return;
+    if (confirm("Calibration drives the lens to BOTH end stops (~10–15 s).\nIs the motor mounted firmly and the lens clear?"))
+      post("calibrate", { ask_direction: $("askdir").checked });
+  };
+  $("acceptspan").onclick = function () {
+    if (confirm("Only if you remounted the motor on purpose: store this mount's encoder span as the new slip reference and calibrate again?"))
+      post("calibrate", { accept_span: true });
+  };
+  $("uselens").onclick = function () { post("select-lens", { name: $("lenssel").value }); };
+  $("createlens").onclick = function () { var n = $("newlens").value.trim(); if (n) post("create-lens", { name: n }).then(function (d) { if (d && !d.error) $("newlens").value = ""; }); };
+  document.querySelectorAll(".jog").forEach(function (b) { b.onclick = function () { post("move", { delta: parseFloat(b.dataset.d) }); }; });
+  $("slider").onchange = function () { post("move", { pct: parseFloat($("slider").value) }); };
+  $("goto").onclick = function () { var v = parseFloat($("gotopct").value); if (isFinite(v)) post("move", { pct: v }); };
+  $("mark").onclick = function () { var v = $("markdist").value.trim(); if (v) post("mark", { distance: v }).then(function (d) { if (d && !d.error) $("markdist").value = ""; }); };
+  $("markdist").addEventListener("keydown", function (e) { if (e.key === "Enter") $("mark").click(); });
+  $("markinf").onclick = function () { post("mark", { distance: "inf" }); };
+  $("marks").onclick = function (e) {
+    var t = e.target;
+    if (t.dataset.go) post("goto-mark", { distance: t.dataset.go });
+    if (t.dataset.del) post("delete-mark", { distance: t.dataset.del });
+  };
+  $("savemap").onclick = function () { post("save-map"); };
+  $("discardmap").onclick = function () { if (confirm("Discard unsaved marks?")) post("discard-map"); };
+  $("findcams").onclick = function () {
+    post("find-cameras").then(function (d) {
+      if (!d || !d.result) return;
+      var sel = $("cameras"); sel.innerHTML = "<option value=''>— " + d.result.cameras.length + " camera(s) —</option>";
+      d.result.cameras.forEach(function (c) { var o = document.createElement("option"); o.value = c; o.textContent = c.split(":").pop(); sel.appendChild(o); });
+    });
+  };
+  $("cameras").onchange = function () { if ($("cameras").value) post("settings", { camera_path: $("cameras").value }); };
+  $("savecfg").onclick = function () { post("save-settings"); };
+
+  document.querySelectorAll("[data-set]").forEach(function (el) {
+    var key = el.dataset.set;
+    var commit = function () {
+      var v;
+      if (el.type === "checkbox") v = el.checked;
+      else if (el.dataset.int) v = parseInt(el.value, 10);
+      else if (el.type === "number" || el.type === "range") v = parseFloat(el.value);
+      else v = el.value;
+      if (v !== v) return;
+      queueSetting(key, v);
+    };
+    // text fields commit on change (host names mid-typing would reconnect constantly)
+    el.addEventListener(el.type === "range" || el.type === "checkbox" ? "input" : "change", commit);
+    el.addEventListener("focus", function () { editing = el; });
+    el.addEventListener("blur", function () { editing = null; });
+  });
+
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "select" || tag === "textarea") return;
+    if (e.code === "Space") { e.preventDefault(); post("toggle-arm"); }
+    else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && S && !S.armed) {
+      e.preventDefault(); post("move", { delta: (e.key === "ArrowLeft" ? -1 : 1) * (e.shiftKey ? 2 : 0.2) });
+    }
+  });
+
+  // ---------------------------------------------------------------- hover explanations ([data-tip])
+  // Hit-tested by position rather than by mouse events, so greyed-out controls (and the map panel
+  // while it can't be used) still explain themselves. The smallest element under the pointer wins.
+  var tipEl = document.createElement("div"), tipFor = null, tipTimer = null;
+  tipEl.className = "tip"; document.body.appendChild(tipEl);
+  function hideTip() { clearTimeout(tipTimer); tipFor = null; tipEl.classList.remove("on"); }
+  function tipAt(x, y) {
+    if ($("modalbg").style.display === "flex") return null;
+    var best = null, area = Infinity;
+    document.querySelectorAll("[data-tip]").forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      if (!r.width || x < r.left || x > r.right || y < r.top || y > r.bottom) return;
+      if (r.width * r.height < area) { area = r.width * r.height; best = el; }
+    });
+    return best;
+  }
+  function showTip(el) {
+    tipEl.textContent = el.dataset.tip;
+    tipEl.style.left = "0px"; tipEl.style.top = "0px";
+    var r = el.getBoundingClientRect(), t = tipEl.getBoundingClientRect();
+    var x = Math.min(Math.max(8, r.left), window.innerWidth - t.width - 8), y = r.bottom + 6;
+    if (y + t.height > window.innerHeight - 8) y = Math.max(8, r.top - t.height - 6);
+    tipEl.style.left = x + "px"; tipEl.style.top = y + "px";
+    tipEl.classList.add("on");
+  }
+  document.addEventListener("pointermove", function (e) {
+    if (e.pointerType === "touch") return;
+    var el = tipAt(e.clientX, e.clientY);
+    if (el === tipFor) return;
+    hideTip(); tipFor = el;
+    if (el) tipTimer = setTimeout(function () { showTip(el); }, 350);
+  });
+  document.documentElement.addEventListener("pointerleave", hideTip);
+  document.addEventListener("pointerdown", hideTip);
+  window.addEventListener("scroll", hideTip, true);
+
+  function poll() {
+    fetch("/api/state").then(function (r) { return r.json(); }).then(function (s) {
+      if (s.error) return; lastPoll = Date.now(); render(s);
+    }).catch(function () {
+      $("statepill").textContent = "BRIDGE UNREACHABLE"; $("statepill").className = "pill bad";
+    });
+  }
+  poll(); setInterval(poll, 100);
+  window.addEventListener("resize", function () { if (S) { drawChart(); drawMap(S); } });
+})();
+</script>
+</body>
+</html>

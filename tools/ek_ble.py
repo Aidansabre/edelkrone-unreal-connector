@@ -182,7 +182,7 @@ def list_lenses(cfg) -> None:
         print("no lens profiles yet - `ek-ble calibrate --lens NAME` creates one")
     for f in files:
         try:
-            prof = LensProfile.from_json(_json.loads(f.read_text()))
+            prof = LensProfile.from_json(_json.loads(f.read_text(encoding="utf-8")))
         except Exception as e:
             print(f"  {f.stem:24s} unreadable: {e}")
             continue

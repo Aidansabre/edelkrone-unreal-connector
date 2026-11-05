@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import io
 import time
 from pathlib import Path
 from typing import Any
 
-import yaml
+from ruamel.yaml import YAML
 
 from eklink.client import EdelkroneClient
 
@@ -59,9 +60,29 @@ def _merge(base: dict, over: dict) -> dict:
     return out
 
 
+def _yaml() -> YAML:
+    # ruamel.yaml in pure-Python mode: installs and runs on any Python version without a C compiler
+    # (PyYAML needs one wherever it has no prebuilt package, e.g. new Python releases on Windows).
+    y = YAML(typ="safe", pure=True)
+    y.default_flow_style = False
+    y.allow_unicode = True
+    y.sort_base_mapping_type_on_output = False
+    return y
+
+
+def load_yaml(text: str):
+    return _yaml().load(text)
+
+
+def dump_yaml(data) -> str:
+    buf = io.StringIO()
+    _yaml().dump(data, buf)
+    return buf.getvalue()
+
+
 def load_config(path: str | Path | None = None) -> dict:
     p = Path(path) if path else ROOT / "config.yaml"
-    data = yaml.safe_load(p.read_text()) if p.exists() else {}
+    data = load_yaml(p.read_text(encoding="utf-8")) if p.exists() else {}
     return _merge(DEFAULTS, data or {})
 
 

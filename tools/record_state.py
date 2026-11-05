@@ -24,7 +24,7 @@ def main(argv=None) -> None:
     cols = ["t", "state", "ue_cm", "ue_motor", "target", "motor", "motor_cm", "motor_age_ms", "mode", "leader"]
     t0 = time.monotonic()
     n = 0
-    with open(a.csv, "w", newline="") as f:
+    with open(a.csv, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(cols)
         while time.monotonic() - t0 < a.seconds:
