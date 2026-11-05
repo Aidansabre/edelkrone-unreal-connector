@@ -6,3 +6,4 @@ config.yaml
 logs/
 *.csv
 lenses/sim/
+build/
