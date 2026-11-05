@@ -519,3 +519,12 @@ async def test_bridge_both_ways_tracking_focus_keeps_unreal_leading(tmp_path):
         await _stop(b, task)
     finally:
         await ue.stop()
+
+
+def test_saved_address_must_fit_the_platform():
+    from ekble.motor import address_usable
+
+    mac_uuid, hw = "C3C52AF5-4328-B834-25EE-D9E5F405CCBA", "D4:36:39:AA:01:2F"
+    assert address_usable(mac_uuid, "darwin") and not address_usable(hw, "darwin")
+    assert address_usable(hw, "win32") and not address_usable(mac_uuid, "win32")
+    assert address_usable(hw.replace(":", "-"), "win32") and not address_usable(None, "win32")

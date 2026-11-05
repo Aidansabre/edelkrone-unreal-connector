@@ -2,12 +2,12 @@
 
 **Edelkrone Unreal Connector** is middleware that lets an Unreal Engine **CineCamera's focus distance drive a real lens** in a virtual-production setup. The lens is turned by an edelkrone **FocusPLUS PRO** focus motor (labelled "Lens Controller"). The middleware also reports the lens position back to Unreal.
 
-*Status as of 2026-11-05:* the motor side is complete and verified on hardware. The Unreal side is built and tested against a simulator, but not yet against a real Unreal Engine (see [Status](#status)).
+*Status as of 2026-11-05:* the motor side is complete and verified on hardware. Against a real Unreal 5 editor, Unreal drives the lens, a hand on the lens drives Unreal ("Both ways"), and Multi-User Replication carries that to the other editors (see [Status](#status)). To set it up, follow [setup-guide.md](setup-guide.md).
 
 ## System at a glance
 
 ```
- Windows PC                              Mac (this project)                                 Camera rig
+ Unreal PC (Windows)                     Bridge computer: a Mac or the Unreal PC            Camera rig
 ┌──────────────────────┐   WebSocket   ┌──────────────────────────────────────────┐  Bluetooth  ┌──────────────────┐
 │ Unreal Engine        │◀────:30020───▶│ ek-bridge                                │◀──── LE ───▶│ FocusPLUS PRO    │
 │  CineCamera          │               │  ├ unreal/   Remote Control client       │             │ ("Lens           │
@@ -94,8 +94,11 @@ During calibration, a **slip check** compares the encoder span with the lens's s
 | Calibration (ends + direction + slip check), no app | ✅ Verified from a fresh power-on; 0 % = closest focus confirmed by eye |
 | Lens mapping (CLI and web UI) | ✅ `test-lens` mapped: 8 marks, 60 cm … ∞ (96.66 %) |
 | Streaming + lead | ✅ Real motor following a simulated Unreal pull: ~2 % of travel average error on a fast pull, ≤ 0.1 % at rest |
-| Web UI | ✅ Full flow verified against the simulator; read-only against the real motor. Moving actions (jog, calibrate, arm) not yet exercised on hardware through the UI |
-| Unreal Remote Control side | 🟡 Connected to a real editor: preset, focus reads (~40–50 Hz), writes. Sequencer, Tracking, PIE and feedback still to check ([unreal-setup.md](unreal-setup.md)) |
+| Web UI | ✅ Full flow verified against the simulator; on hardware: calibrate, arm, mode switching, Both ways, give back |
+| Unreal Remote Control side | 🟡 Real editor: camera from the preset, focus reads (~40–50 Hz), writes; Unreal drives the lens (2.2 % mean error on 6 s pulls). Sequencer, Tracking, PIE and feedback still to check ([unreal-setup.md](unreal-setup.md)) |
+| Both ways (hand on the lens ⇄ Unreal) | ✅ On the rig: hand takeovers, takeback from Unreal and from the web UI; Unreal follows the lens ~140 ms behind |
+| Multi-User | ✅ Lens-driven focus reaches the other editors with Multi-User **Replication** (no undo transactions are sent) |
+| Bridge on Windows | 🟡 Installer steps, launcher and Bluetooth address handling are in place; not yet run on hardware |
 | Link Adapter backend | ⏸ Built and tested offline; blocked by the motor not being recognised (legacy) |
 | Link Adapter's encoder wheel | ⏸ Not usable on the Bluetooth path; investigation steps in the research log |
 
@@ -103,8 +106,9 @@ During calibration, a **slip check** compares the encoder span with the lens's s
 
 | Document | For |
 |---|---|
-| [user-guide.md](user-guide.md) | Operators: setup, calibration, lens mapping, running, troubleshooting |
-| [unreal-setup.md](unreal-setup.md) | One-time Unreal project setup and verification status |
+| [setup-guide.md](setup-guide.md) | **Setting up from scratch:** install (Windows/macOS), Unreal, Remote Control preset, Multi-User Replication, lens, first test |
+| [user-guide.md](user-guide.md) | Operators: daily use, calibration, lens mapping, running, troubleshooting |
+| [unreal-setup.md](unreal-setup.md) | Unreal reference: Remote Control, preset, Multi-User Replication, security, verification status |
 | [focusplus-protocol.md](focusplus-protocol.md) | Bluetooth protocol reference for the FocusPLUS PRO |
 | [performance.md](performance.md) | Measured latency, speed and tracking accuracy |
 | [development.md](development.md) | Code structure, tests, simulator, extending the project |

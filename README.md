@@ -28,6 +28,10 @@ cp config.example.yaml config.yaml
    - **Map** a few distances with a focus target, including **infinity**. Save.
 4. Set the Unreal host (web UI → Unreal), then **ARM**.
 
+**Windows:** install Python 3.13, then run `py -3.13 -m venv .venv`, `.venv\Scripts\python -m pip install -e .` and `copy config.example.yaml config.yaml`. Set `ble.address: null` and start **`Run Bridge.bat`**. This isn't yet tested on hardware.
+
+**Complete setup**, from installation through Unreal, the Remote Control preset, Multi-User Replication and the lens to the first test: **[docs/setup-guide.md](docs/setup-guide.md)**.
+
 **No hardware?**
 
 ```bash
@@ -42,9 +46,10 @@ cp config.example.yaml config.yaml
 
 | | |
 |---|---|
+| [Setup guide](docs/setup-guide.md) | **Start here:** one full setup, start to finish, on Windows or macOS |
 | [Overview](docs/overview.md) | Architecture, key decisions, safety model, status |
 | [User guide](docs/user-guide.md) | Setup, web UI, calibration, lens mapping, changing lenses, running, config, troubleshooting |
-| [Unreal setup](docs/unreal-setup.md) | Remote Control API, preset, firewall, camera, feedback actor, verification status |
+| [Unreal setup](docs/unreal-setup.md) | Unreal reference: Remote Control, the preset, Multi-User Replication, security, verification status |
 | [FocusPLUS PRO protocol](docs/focusplus-protocol.md) | Bluetooth GATT, frames, commands, replies |
 | [Performance](docs/performance.md) | Measured latency, speed, accuracy |
 | [Development](docs/development.md) | Code layout, runtime architecture, web API, tests, tools |
@@ -56,4 +61,4 @@ cp config.example.yaml config.yaml
 .venv/bin/pytest
 ```
 
-57 tests, all offline: a simulated motor speaking the real frames, a fake Unreal Remote Control server and a fake edelkrone SDK.
+58 tests, all offline: a simulated motor speaking the real frames, a fake Unreal Remote Control server and a fake edelkrone SDK.

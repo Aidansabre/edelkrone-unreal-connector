@@ -1,8 +1,10 @@
-# Unreal setup (Windows PC)
+# Unreal setup reference
 
-> **Status (2026-11-05): connected to a real Unreal 5 editor.** The bridge finds the camera through a Remote Control preset, reads its focus at about 40–50 Hz with a ~20 ms round trip, and writes Manual Focus Distance through the preset. Still to check: Sequencer playback, Tracking, Play-In-Editor, the feedback actor, and preset events. See the checklist at the bottom.
+> **Status (2026-11-05): connected to a real Unreal 5 editor.** The bridge finds the camera through a Remote Control preset, reads its focus at about 40–50 Hz with a ~20 ms round trip, and writes Manual Focus Distance through the preset. **Multi-User Replication** carries lens-driven focus changes to the other editors in a Multi-User session. Still to check: Sequencer playback, Tracking, Play-In-Editor, the feedback actor, and preset events. See the checklist at the bottom.
 
-The bridge on the Mac connects **out** to Unreal's Remote Control WebSocket server. Nothing needs to be built in Unreal, and no plugin of ours is involved.
+**Step-by-step setup** (install → Unreal → preset → Multi-User → lens → first test) is in **[setup-guide.md](setup-guide.md)**. This page is the reference: how the bridge uses Unreal, what each setting is for, and what has been verified.
+
+The bridge connects **out** to Unreal's Remote Control WebSocket server, from another computer or from the same PC. Nothing needs to be built in Unreal, and no plugin of ours is involved.
 
 ## How the bridge talks to Unreal
 - **Transport:** one WebSocket, `ws://<PC>:30020`. HTTP routes are tunnelled over it (`{"MessageName": "http", …}`), with request ids matched to replies (FIFO fallback).
@@ -18,6 +20,7 @@ The bridge on the Mac connects **out** to Unreal's Remote Control WebSocket serv
 - **Which preset:** `unreal.preset` in config or the web UI. Empty means the first preset that exposes a CineCamera focus property; a preset with "edelkrone" in its name wins.
 - **Without a preset:** the bridge falls back to `EditorActorSubsystem.GetAllLevelActors`. Unreal blocks that call by default ("not allowed by remote control settings"), so in practice you need a preset or an explicit `unreal.camera_path`.
 - **Play-In-Editor:** the bridge follows the `UEDPIE_0_` copy of the camera, using object routes, since the preset is bound to the editor object.
+- **No undo transactions:** writes use `WRITE_ACCESS` / `"GenerateTransaction": false`. While the lens leads, the bridge writes up to ~13 times a second, and transactions would put each write in the undo history ("Remote Set Object Property") and in the Multi-User session history. The consequence: **Multi-User doesn't share these writes on its own**; use Replication (below).
 
 ### Why read Current Focus Distance, not Manual Focus Distance
 - **Current Focus Distance is what Unreal renders.** It includes Tracking focus and the camera's focus smoothing.
@@ -32,16 +35,59 @@ The bridge on the Mac connects **out** to Unreal's Remote Control WebSocket serv
 3. **Windows Defender Firewall:** allow inbound TCP 30020 for the Unreal Editor (Private network). The PC's network profile must be *Private*.
 4. **Editor Preferences → General → Performance:** untick **Use Less CPU when in Background**, or Unreal throttles while its window isn't focused.
 5. **Camera:** a **CineCameraActor placed in the level**. In Sequencer, bind it as a **possessable**, not a spawnable. Use the Manual or Tracking focus method.
-6. **Preset:** create a **Remote Control Preset** (Content Browser → Remote Control → Remote Control Preset). Select the CineCamera in the level and expose:
-   - **Current Focus Distance** (Current Camera Settings). If Unreal won't expose it, skip it: the bridge reads it directly instead.
-   - **Manual Focus Distance** (Focus Settings).
+6. **Preset:** see [The Remote Control preset](#the-remote-control-preset) below.
 7. **Feedback actor** (optional):
    - Create a Blueprint actor `BP_EdelkroneFeedback` with three **Instance Editable** variables: `MotorFocusDistanceCm` (float), `MotorEncoder` (float), `BridgeState` (string).
    - Place one in the level and expose the three variables in the same preset.
    - Bind them to a UMG widget for an on-screen readout.
-8. **Mac:** set the host in the web UI (Unreal → Host) or `unreal.host` in `config.yaml`.
+8. **Multi-User:** set up Replication (below).
+9. **Bridge:** set the host in the web UI (Unreal → Host) or `unreal.host` in `config.yaml`. Use `127.0.0.1` when the bridge runs on the same PC; then the bind address may stay `127.0.0.1`, and no firewall rule is needed.
 
-### Locking it down
+## The Remote Control preset
+**Create it:**
+1. Content Browser → **Add (+) → Remote Control → Remote Control Preset**. A name containing "edelkrone", e.g. `RCP_Edelkrone`, makes auto-detection prefer it.
+2. Open the preset.
+3. Select the objects in the level.
+4. In the Details panel, click the expose (Remote Control) icon on each property you want. Unreal versions differ in how the icon looks.
+5. Save the preset.
+
+**What to expose:**
+
+| Expose | From | Required? | Notes |
+|---|---|---|---|
+| Manual Focus Distance | CineCameraActor → CameraComponent → Focus Settings | **Yes** | Identifies the camera; written by Lens → Unreal and Both ways |
+| Current Focus Distance | CineCameraActor → CameraComponent → Current Camera Settings | Recommended | Read-only: if Unreal won't expose it, the bridge reads it from the camera directly |
+| MotorFocusDistanceCm, MotorEncoder, BridgeState | BP_EdelkroneFeedback instance | Optional | Feedback; also identifies the feedback actor |
+
+**How the bridge uses it:**
+- **Matching by name:** the bridge recognises properties by their underlying name (`ManualFocusDistance`, …), not by label, so you can rename labels freely.
+- **Rebinding:** it re-reads the preset every 5 s. Rebinding the preset to another camera in Unreal switches the bridge to that camera without a restart.
+- **Which preset:** set `unreal.preset` (web UI → Unreal → Preset) to pin one. Empty means auto-detect.
+- **Check:** `ue-probe find-cameras` lists every preset with its camera, feedback actor and recognised fields.
+
+## Multi-User Editing: Replication
+**The problem:**
+- **Multi-User shares transactions.** Edits in the Details panel and Sequencer keyframe edits are transactions.
+- **The bridge's writes are not transactions** (see above). So when the **lens leads** (Lens → Unreal, or Both ways after a hand takeover), only the editor the bridge talks to sees the focus change.
+- **Unreal → lens is unaffected.** It only reads.
+
+**The fix: Multi-User Replication.** It streams a property's current value from its *author* to the other clients, however the value was set. Confirmed on the stage (2026-11-05): with the camera's focus replicated, lens-driven focus changes reach the other editors.
+
+1. Every editor joins the session with a **unique Display Name** (Project Settings → Multi-User Editing). Replication presets don't work with duplicate names.
+2. **On the editor the bridge talks to**, open the session's **Replication** tab:
+   1. Click **Add** and choose the CineCameraActor.
+   2. Click **Edit** and select the camera component's **Focus Settings**, or at least **Manual Focus Distance**.
+3. Check that this editor is the **author**: the client that adds a property becomes its author, and the Author dropdown changes it.
+4. Rate: **Realtime** or ≥ 30 fps (the default is 30).
+5. **Save** it as a Replication preset, and apply it in each new session.
+
+**Rules:**
+- **Replicate Manual Focus Distance, not Current Focus Distance.** Each editor computes Current Focus Distance from it, with its own smoothing.
+- **Make focus changes on the authoring editor.** Its value is what the others receive.
+
+**Alternative if Replication isn't available** (older UE 5): transacted writes (`"GenerateTransaction": true` / `WRITE_TRANSACTION_ACCESS`) are replicated by Multi-User like Details-panel edits. But every write becomes an undo step and a session-history entry. This isn't implemented; it would need throttling to a few writes a second plus a final write when the lens stops.
+
+## Locking it down
 A preset does **not** restrict access by itself. Remote Control has no "presets only" switch: anything that can reach port 30020 can read and write any object property. To limit who can reach it, use these Remote Control settings:
 
 | Setting | Recommended |
@@ -51,7 +97,8 @@ A preset does **not** restrict access by itself. Remote Control has no "presets 
 | Windows firewall rule for 30020 | Scope it to the Mac's IP |
 | *Allow any remote function call*, *Enable remote Python execution*, console command execution | Off (the defaults). The bridge needs no function calls. |
 
-## Check from the Mac
+## Check from the bridge computer
+On Windows use `.venv\Scripts\ue-probe` and `.venv\Scripts\python`.
 ```bash
 .venv/bin/ue-probe --host <PC-IP> info                          # connection + routes
 .venv/bin/ue-probe --host <PC-IP> find-cameras                  # presets, their camera and fields
@@ -75,6 +122,7 @@ Setup: Unreal 5 editor on Windows (192.168.1.100) and the Mac on the same LAN, ~
 | Bridge poll loop against the editor | ✅ ~50 Hz, editor idle |
 | Write Manual Focus Distance through the preset | ✅. Current Focus Distance follows within ~250 ms because of focus smoothing. |
 | Object access is not limited by presets | ✅ confirmed (CurrentFocusDistance readable without being exposed) |
+| Lens-driven focus reaches the other editors in a **Multi-User session** | ✅ with Multi-User **Replication** of the camera's focus (stage test). ❌ without it: the bridge doesn't send transactions. |
 | **Unreal drives the real lens** (scripted pulls via the preset) | ✅ 6 s pulls 60 cm ↔ 15 m: 2.2 % mean error, 20 ms residual lag. See [performance.md](performance.md#5b-end-to-end-with-real-unreal-2026-11-05) |
 
 ## Still to verify
@@ -85,3 +133,4 @@ Setup: Unreal 5 editor on Windows (192.168.1.100) and the Mac on the same LAN, ~
 - [ ] **Feedback actor** through the preset.
 - [ ] `subscribe-test --preset <name>`: do preset events fire for Sequencer/Tracking changes? We expect not, which is why the bridge polls.
 - [ ] With a **passphrase** enforced.
+- [ ] Multi-User Replication **rate and latency** to the other editors, measured (it works, confirmed by eye).

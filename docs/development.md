@@ -7,7 +7,7 @@ Code structure, how the pieces interact, testing, and how to extend the project.
 ```bash
 /opt/homebrew/bin/python3.13 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
-.venv/bin/pytest            # 57 tests, all offline (no motor, no Unreal)
+.venv/bin/pytest            # 58 tests, all offline (no motor, no Unreal)
 ```
 
 | | |
@@ -46,7 +46,8 @@ tests/             pytest suite (fakes for SDK, Unreal and motor)
 lenses/            lens profiles (*.json); lenses/sim/ is the simulator's (git-ignored)
 docs/              this documentation
 scripts/terminal.sh   run any command in Terminal.app (Bluetooth permission) with logging
-Run Bridge.command    double-click launcher (bridge + web UI)
+Run Bridge.command    double-click launcher, macOS (runs in Terminal for Bluetooth permission)
+Run Bridge.bat        double-click launcher, Windows
 ```
 
 ## Runtime architecture

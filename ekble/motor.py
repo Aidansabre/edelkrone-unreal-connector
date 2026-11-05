@@ -12,6 +12,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import re
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -55,9 +57,26 @@ class MotorState:
         return time.monotonic() - self.t_status if self.t_status else math.inf
 
 
+_UUID = re.compile(r"^[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$")
+_MAC = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
+
+
+def address_usable(address: str | None, platform: str | None = None) -> bool:
+    """macOS identifies Bluetooth devices by a per-Mac UUID, Windows/Linux by MAC address.
+    A saved address of the other kind (config copied between machines) can never match."""
+    if not address:
+        return False
+    platform = platform or sys.platform
+    return bool(_UUID.match(address)) if platform == "darwin" else bool(_MAC.match(address))
+
+
 async def find_device(address: str | None = None, names=P.ADV_NAMES, timeout: float = 15.0):
     from bleak import BleakScanner
 
+    if address and not address_usable(address):
+        log.info("ignoring saved Bluetooth address %s (not a %s address); scanning for the motor by name",
+                 address, "macOS" if sys.platform == "darwin" else "MAC")
+        address = None
     if address:
         return await BleakScanner.find_device_by_address(address, timeout=timeout)
     return await BleakScanner.find_device_by_filter(lambda d, a: (d.name or a.local_name or "") in names, timeout=timeout)

@@ -1,6 +1,6 @@
 # User guide
 
-How to set up and run the focus bridge. For what the system is and why it works this way, see [overview.md](overview.md).
+How to run the focus bridge day to day. **Setting it up from scratch** (install on Windows or macOS, Unreal project, Remote Control preset, Multi-User Replication, first test) is in **[setup-guide.md](setup-guide.md)**. For what the system is and why it works this way, see [overview.md](overview.md).
 
 ## Contents
 1. [Requirements](#1-requirements)
@@ -21,13 +21,25 @@ How to set up and run the focus bridge. For what the system is and why it works 
 
 | | |
 |---|---|
-| **Computer** | A Mac with Bluetooth (developed on an Apple Silicon Mac, macOS 27). |
-| **Python** | Python 3.11 or newer. The project uses Homebrew's `python3.13`; the macOS system Python (3.9) is too old. |
+| **Computer** | A Mac or a Windows 10/11 PC with Bluetooth LE. Developed and tested on an Apple Silicon Mac (macOS 27). **Windows is not yet tested on hardware** (see [setup-guide.md](setup-guide.md#2a-windows)). |
+| **Python** | Python 3.11 or newer. On macOS use Homebrew's `python3.13` (the system Python, 3.9, is too old); on Windows use python.org's 3.13. |
 | **Motor** | edelkrone **FocusPLUS PRO** ("Lens Controller", Bluetooth name `FocusPsPr`), firmware 0.30 tested. It is controlled **standalone**: no HeadPLUS, no Link Adapter. |
 | **edelkrone app** | **Not needed.** If it's open on any phone, iPad or Mac, quit it: the motor accepts one Bluetooth connection at a time. |
-| **Unreal** | Unreal Engine with the Remote Control API plugin, usually on a separate Windows PC on the same network. See [unreal-setup.md](unreal-setup.md). |
+| **Unreal** | Unreal Engine 5 with the Remote Control API plugin, on the same PC or on another PC on the same network. In a Multi-User session, Multi-User Replication of the camera's focus too. See [unreal-setup.md](unreal-setup.md). |
 
 ## 2. Installation
+
+**Windows:** see [setup-guide.md → 2a](setup-guide.md#2a-windows). In short: install Python 3.13, then
+
+```powershell
+py -3.13 -m venv .venv
+.venv\Scripts\python -m pip install -e .
+copy config.example.yaml config.yaml
+```
+
+Set `ble.address: null` in `config.yaml`, then start the bridge with **`Run Bridge.bat`**. On Windows, the commands in this guide are `.venv\Scripts\<tool>` instead of `.venv/bin/<tool>`.
+
+**macOS:**
 
 ```bash
 cd "Edelkrone Unreal Connector"
@@ -47,11 +59,11 @@ Find the motor once, then put its id in `config.yaml` → `ble.address`. That st
 .venv/bin/ek-ble scan
 ```
 
-The scan lists `FocusPsPr` with a macOS id like `C3C52AF5-…`.
+The scan lists `FocusPsPr` with a macOS id like `C3C52AF5-…`, or on Windows a MAC address like `D4:36:…`. A saved address that doesn't fit the computer (a macOS id on Windows, or the other way round) is ignored, and the bridge scans for the motor by name.
 
 ## 3. Starting the bridge
 
-**Double-click `Run Bridge.command`.** A Terminal window opens with the bridge, and your browser opens **http://127.0.0.1:8766**.
+**Double-click `Run Bridge.command`** (macOS) or **`Run Bridge.bat`** (Windows). A Terminal or console window opens with the bridge, and your browser opens **http://127.0.0.1:8766**.
 
 Equivalent command and useful options:
 
@@ -249,3 +261,5 @@ The field is called `encoder` for historical reasons; with the Bluetooth backend
 | "Can't arm yet: no recent value from Unreal" | Check the Unreal panel: host/port, firewall, plugin, camera. See [unreal-setup.md](unreal-setup.md). |
 | Lens lags fast pulls | Physical limits: ~60 %/s top speed and ~270 ms motor lag. Tune **Lead** (more lead = less lag but more overshoot on reversals). |
 | Web UI unreachable | The bridge isn't running, or another program uses port 8766 (`--web-port`). |
+| Other Multi-User editors don't follow when the **lens** leads | The bridge writes focus without undo transactions, and Multi-User only shares transactions. Set up **Multi-User Replication** of the camera's Focus Settings, authored by the bridge's editor. See [unreal-setup.md](unreal-setup.md#multi-user-editing-replication). |
+| Windows: motor not found although it's on | Set `ble.address: null`. Don't pair the motor in Windows Settings; if it was paired and won't connect, remove it there. Check that `ek-ble scan` lists `FocusPsPr`. |
