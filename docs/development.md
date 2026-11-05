@@ -7,7 +7,7 @@ Code structure, how the pieces interact, testing, and how to extend the project.
 ```bash
 /opt/homebrew/bin/python3.13 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
-.venv/bin/pytest            # 52 tests, all offline (no motor, no Unreal)
+.venv/bin/pytest            # 57 tests, all offline (no motor, no Unreal)
 ```
 
 | | |
@@ -23,6 +23,7 @@ bridge/            the ek-bridge application
   app.py             Bridge: tasks, state machine, control loop, feedback, CLI (ek-bridge)
   backends.py        MotorBackend interface + BleBackend (Bluetooth) + LinkBackend (legacy HTTP)
   control.py         BridgeControl mixin: UI snapshot + act_* actions (calibrate, map, settings…)
+  handover.py        both-ways mode: HandDetector (lens turned by hand) + EchoFilter (our own Unreal writes)
   web.py             stdlib HTTP server thread → asyncio loop; JSON API
   ui/index.html      the web page (inline JS/CSS, no build step)
 ekble/             FocusPLUS PRO Bluetooth driver
@@ -58,7 +59,7 @@ Tasks started by `Bridge.run()`:
 |---|---|---|
 | `FocusStreamer.run` (via backend) | 30 Hz loop (Bluetooth caps the real rate at ~12–14/s) | While armed, sends rate-limited move-to-percent targets. Interleaves position reads (3 Hz armed, 8 Hz idle) and status (1 Hz). |
 | `UECamera.poll_loop` | 60 Hz | Reconnects as needed, follows the PIE copy of the camera, reads `CurrentFocusDistance` |
-| `Bridge.control_loop` | 60 Hz | `ue_drives`: cm → lens map → lead predictor → `backend.set_target`. `wheel_drives`: lens cm → `ManualFocusDistance` |
+| `Bridge.control_loop` | 60 Hz | Unreal leads (`ue_drives`, or `both` with `leader == "unreal"`): cm → lens map → lead predictor → `backend.set_target`, plus hand detection. Lens leads (`wheel_drives`, or `both` with `leader == "lens"`): lens % → map → `ManualFocusDistance`; in `both`, Manual Focus Distance is also read at 5 Hz to notice Unreal taking over |
 | `Bridge.feedback_loop` | 10 Hz | Writes lens cm/position/state to `BP_EdelkroneFeedback` |
 | `Bridge.watchdog_loop` | 1 Hz | Re-checks the motor while idle; disarms on stale motor data while armed |
 | status line, stdin keys | 5 Hz / on input | Terminal output and `a`/`c`/`m`/`s`/`q` |
@@ -77,7 +78,11 @@ STARTING → NOT_CONNECTED / NO_STATUS → NEEDS_CALIBRATION → NEEDS_LENS_MAP 
             lens switched at runtime ──────┘ (needs_recal)          CALIBRATING (busy) ◀───────┘ (via act_calibrate)
 ```
 
-- **Arming** requires `READY` and, in `ue_drives`, an Unreal value younger than `ue_timeout_s`.
+- **Arming** requires `READY` and, in `ue_drives`/`both`, an Unreal value younger than `ue_timeout_s`.
+- **Who leads** (`both`): `Bridge.leader`, switched by `set_leader()`.
+  - `HandDetector` (`bridge/handover.py`) reports `moved` when the lens is off a steady target. It judges only a position taken at least `settle_s` after the target stopped changing; an earlier read can still be on its way and give a false trigger.
+  - `EchoFilter` keeps the values the bridge wrote recently, so that reading back its own (possibly lagging) writes isn't mistaken for Unreal taking over.
+  - While the lens leads, the streamer stops sending targets and uses every write slot for position reads (`FocusStreamer.fast_reads`, 14 Hz requested, ~13.5 Hz measured).
 - **Calibration** runs as a task (`busy = "calibrating"`). Its closest-focus question is an `asyncio.Future` answered by `act_answer` from the UI. CLI tools pass an `input()`-based `ask` instead.
 
 ## Web API (`bridge/web.py`, `bridge/control.py`)
@@ -91,7 +96,8 @@ STARTING → NOT_CONNECTED / NO_STATUS → NEEDS_CALIBRATION → NEEDS_LENS_MAP 
 | Action | Body |
 |---|---|
 | `arm`, `disarm`, `toggle-arm`, `stop` | – |
-| `mode` | `{mode: ue_drives \| wheel_drives}` |
+| `mode` | `{mode: ue_drives \| wheel_drives \| both}` |
+| `lead` | `{leader: unreal \| lens}` (armed, `both` only) |
 | `calibrate` | `{accept_span?, ask_direction?}` (starts a task) |
 | `answer` | `{id, answer: macro \| infinity}` |
 | `cancel-question` | – |

@@ -25,7 +25,7 @@ The data path in normal operation (`ue_drives` mode):
 4. **Stream to the motor.** `ekble/` sends move-to-percent targets over Bluetooth (about 12 per second, the most the link allows), rate-limited to the motor's top speed.
 5. **Report back.** The motor's actual position goes back to Unreal as feedback (an optional helper Blueprint actor).
 
-In `wheel_drives` mode the direction is reversed: the motor position is the source, and the bridge writes it into the camera's `ManualFocusDistance`.
+In `wheel_drives` mode the direction is reversed: the motor position is the source, and the bridge writes it into the camera's `ManualFocusDistance`. In `both` mode the bridge switches between the two by itself: turning the lens by hand makes the lens lead, and a change to Manual Focus Distance in Unreal that the bridge didn't write makes Unreal lead again (`bridge/handover.py`).
 
 ## Components
 

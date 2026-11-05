@@ -104,7 +104,10 @@
     <div class="seg" id="modeseg">
       <button data-mode="ue_drives">Unreal → lens</button>
       <button data-mode="wheel_drives">Lens → Unreal</button>
+      <button data-mode="both" title="Unreal drives the lens; turning the lens by hand takes over until Unreal's focus changes">Both ways</button>
     </div>
+    <span id="leader" class="pill" style="display:none"></span>
+    <button id="giveback" style="display:none">Give focus back to Unreal</button>
     <span class="hint" style="margin:0"><kbd>space</kbd> arm/disarm</span>
   </div>
   <div class="hint" id="whynot"></div>
@@ -306,6 +309,11 @@
     var why = s.problem && s.state !== "READY" ? s.problem : (s.why_not || "");
     $("whynot").textContent = (!s.armed && !s.can_arm && why) ? "Can't arm yet: " + why : "";
     document.querySelectorAll("#modeseg button").forEach(function (b) { b.classList.toggle("on", b.dataset.mode === s.mode); });
+    var both = s.armed && s.mode === "both", lensLeads = both && s.leader === "lens";
+    $("leader").style.display = both ? "" : "none";
+    $("leader").textContent = lensLeads ? "lens leads" : "Unreal leads";
+    $("leader").className = "pill " + (lensLeads ? "warn" : "ok");
+    $("giveback").style.display = lensLeads ? "" : "none";
 
     var L = s.live;
     $("ue_cm").textContent = fmtCm(L.ue_cm);
@@ -474,6 +482,7 @@
   $("arm").onclick = function () { post("toggle-arm"); };
   $("stop").onclick = function () { post("stop"); };
   document.querySelectorAll("#modeseg button").forEach(function (b) { b.onclick = function () { post("mode", { mode: b.dataset.mode }); }; });
+  $("giveback").onclick = function () { post("lead", { leader: "unreal" }); };
   $("calibrate").onclick = function () {
     if (confirm("Calibration drives the lens to BOTH end stops (~10–15 s).\nIs the motor mounted firmly and the lens clear?"))
       post("calibrate", { ask_direction: $("askdir").checked });

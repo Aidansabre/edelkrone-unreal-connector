@@ -56,4 +56,4 @@ cp config.example.yaml config.yaml
 .venv/bin/pytest
 ```
 
-52 tests, all offline: a simulated motor speaking the real frames, a fake Unreal Remote Control server and a fake edelkrone SDK.
+57 tests, all offline: a simulated motor speaking the real frames, a fake Unreal Remote Control server and a fake edelkrone SDK.

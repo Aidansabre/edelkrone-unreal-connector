@@ -55,6 +55,19 @@ class MotorBackend:
     async def fresh_position(self) -> float | None:
         return self.position_motor()
 
+    def position_age(self) -> float:
+        return self.status_age()
+
+    def commanded(self) -> float | None:
+        """Last target actually sent to the motor (None if not streaming)."""
+        return self.target if self.armed else None
+
+    def resend(self) -> None:
+        """Send the current target again on the next tick (e.g. after the lens was moved by hand)."""
+
+    def fast_reads(self, on: bool) -> None:
+        """Read the position as fast as the link allows (the lens leads, nothing is being sent)."""
+
     def __init__(self, cfg: dict):
         self.cfg = cfg
         self.lens: LensProfile | None = None
@@ -206,6 +219,18 @@ class BleBackend(MotorBackend):
 
     def status_age(self) -> float:
         return min(self.motor.state.status_age(), self.motor.state.position_age())
+
+    def position_age(self) -> float:
+        return self.motor.state.position_age()
+
+    def commanded(self) -> float | None:
+        return self.streamer.last_sent if self.streamer.armed else None
+
+    def resend(self) -> None:
+        self.streamer.resend()
+
+    def fast_reads(self, on: bool) -> None:
+        self.streamer.fast_reads = on
 
     def set_target(self, v: float) -> None:
         self.streamer.set_target(v)

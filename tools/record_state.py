@@ -21,7 +21,7 @@ def main(argv=None) -> None:
     ap.add_argument("--rate", type=float, default=25)
     ap.add_argument("--url", default="http://127.0.0.1:8766")
     a = ap.parse_args(argv)
-    cols = ["t", "state", "ue_cm", "ue_motor", "target", "motor", "motor_cm", "motor_age_ms"]
+    cols = ["t", "state", "ue_cm", "ue_motor", "target", "motor", "motor_cm", "motor_age_ms", "mode", "leader"]
     t0 = time.monotonic()
     n = 0
     with open(a.csv, "w", newline="") as f:
@@ -32,7 +32,7 @@ def main(argv=None) -> None:
             s = json.load(urllib.request.urlopen(a.url + "/api/state", timeout=2))
             lv, m = s["live"], s["motor"]
             w.writerow([f"{t:.3f}", s["state"], lv["ue_cm"], lv["ue_pct"], lv["target_pct"], lv["motor_pct"],
-                        lv["motor_cm"], m["age_ms"]])
+                        lv["motor_cm"], m["age_ms"], s.get("mode"), s.get("leader")])
             n += 1
             time.sleep(max(0.0, 1 / a.rate - (time.monotonic() - t)))
     print(f"{n} rows -> {a.csv}")

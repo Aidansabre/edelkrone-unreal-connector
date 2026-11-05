@@ -155,6 +155,7 @@ class BridgeControl:
             "time": time.time(),
             "state": self.state,
             "mode": self.mode,
+            "leader": self.leader,
             "busy": self.busy,
             "armed": self.state == "ARMED",
             "can_arm": can, "why_not": why,
@@ -242,6 +243,20 @@ class BridgeControl:
 
     async def act_toggle_arm(self):
         await (self.act_disarm() if self.state == "ARMED" else self.act_arm())
+
+    async def act_lead(self, leader: str):
+        """Hand the focus to Unreal or the lens ("both ways" mode, armed)."""
+        if leader not in ("unreal", "lens"):
+            raise ValueError("leader must be unreal or lens")
+        if self.state != "ARMED" or self.mode != "both":
+            raise RuntimeError("only while armed in 'Both ways' mode")
+        if leader == "lens":
+            ok, why = await self.lens_can_lead()
+            if not ok:
+                raise RuntimeError(f"the lens can't lead: {why}")
+            self.set_leader("lens", "the lens leads (set in the web UI)")
+        else:
+            self.set_leader("unreal", "Unreal leads (set in the web UI)")
 
     async def act_stop(self):
         await self.disarm()

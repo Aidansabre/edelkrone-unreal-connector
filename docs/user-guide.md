@@ -100,7 +100,7 @@ The first command plays a fake Unreal focus pull; the second runs the bridge aga
 | Area | What it shows / does |
 |---|---|
 | **Status bar** | Motor (firmware, battery, ms per Bluetooth command), Unreal link (address, response time), active lens. A badge shows the bridge state: `READY`, `ARMED`, `NEEDS CALIBRATION`, `NEEDS LENS MAP`, `CALIBRATING`, … |
-| **Live** | **ARM / DISARM** (or `space`), **Stop**, mode: **Unreal → lens** / **Lens → Unreal**. Three readouts: Unreal focus distance (and its % on this lens), the command sent (with lead), and the lens position. A 15-second chart of all three. If arming isn't possible, the reason appears under the button. |
+| **Live** | **ARM / DISARM** (or `space`), **Stop**, mode: **Unreal → lens** / **Lens → Unreal** / **Both ways** (with a who-leads badge and **Give focus back to Unreal**). Three readouts: Unreal focus distance (and its % on this lens), the command sent (with lead), and the lens position. A 15-second chart of all three. If arming isn't possible, the reason appears under the button. |
 | **Setup** | Checklist: motor · lens profile · calibration · distance map. Lens selector (status per lens), **Create** a new lens. **Calibrate** button. |
 | **Distance map** | Position in % (and ≈ distance once mapped). Jog −5 … +5 % (keyboard: `←`/`→` 0.2 %, with `shift` 2 %), slider, go to %. A distance box with **Mark**, plus **Mark infinity**. Marks table (go / delete), map plot (past-infinity zone shaded), **Save map**. Disabled while armed or calibrating. |
 | **Unreal** | Host, port, passphrase, camera path (or **Find** cameras), feedback on/off |
@@ -154,10 +154,17 @@ Selecting a different lens while the bridge runs always requires a new calibrati
 
 1. **Check the state is `READY`.** In Unreal, the camera with the focus you want to drive must be found (Unreal panel shows the camera; use **Find** if there is more than one).
 2. **Choose the mode:**
-   - **Unreal → lens** (normal): Sequencer keyframes, a live focus puller in Unreal, or the Tracking focus method drive the lens.
+   - **Unreal → lens** (normal): Sequencer keyframes, a live focus puller in Unreal, or the Tracking focus method drive the lens. If someone turns the lens by hand, it goes back to Unreal's focus when they let go.
    - **Lens → Unreal:** the lens position is written into the camera's **Manual** focus distance. The camera's focus method must be *Manual*, with no Sequencer focus track active.
+   - **Both ways:** Unreal leads until someone turns the lens by hand; then the lens leads and Unreal follows. Unreal takes over again as soon as its Manual Focus Distance changes to a value the bridge didn't write: someone types one in the Details panel, or Sequencer plays. **Give focus back to Unreal** in the web UI does the same. A badge next to the mode shows who leads. See "Both ways" below.
 3. **ARM** (`space`). Watch the chart: green (lens) should follow purple (Unreal) closely.
 4. **Stop** or **DISARM** ends streaming and stops the motor. If Unreal stops sending (e.g. editor closed), the lens holds and the bridge waits.
+
+**Both ways:**
+- **Hand detection:** the motor doesn't hold the ring once it has reached a target, so a hand can turn it while armed. The bridge treats the lens as turned by hand when it is more than 1.5 % of travel off a target that has been steady for 0.6 s.
+- **While the lens leads:** the bridge sends no targets and reads the lens about 13 times per second. Unreal's focus follows about 140 ms behind (including Unreal's focus smoothing).
+- **When the lens can't lead:** with the **Tracking** focus method, Unreal ignores Manual Focus Distance, so the lens stays with Unreal and returns to its focus when you let go (the log says why). The same happens while **Sequencer** plays a focus track: it overwrites the value every frame, so Unreal takes over again at once.
+- **Distances** sent to Unreal come from your lens map. Past the infinity mark, the bridge sends `unreal.infinity_cm`.
 
 **What to expect:**
 - **Lag:** the motor runs about 270 ms behind a target. The bridge sends targets 270 ms early (**Lead**), which removes most of the lag on smooth pulls. Sudden reversals overshoot slightly, and more lead overshoots more.
@@ -206,7 +213,7 @@ All Bluetooth tools must run in **Terminal.app**, and only while the bridge is *
 | `unreal.poll_hz` | 60 | How often `CurrentFocusDistance` is read |
 | `unreal.infinity_cm` | 100000 | Distance written to Unreal for the infinity end (Lens → Unreal) |
 | `unreal.feedback.enabled` / `actor_path` / `rate_hz` | true / auto / 10 | Write lens position to `BP_EdelkroneFeedback` |
-| `bridge.mode` | `ue_drives` | `ue_drives` or `wheel_drives` |
+| `bridge.mode` | `ue_drives` | `ue_drives`, `wheel_drives` or `both` |
 | `bridge.latency_offset_ms` | `null` | Lead; `null` = backend default (Bluetooth 270 ms) |
 | `bridge.lead_smoothing_s` | 0.15 | Velocity smoothing of the lead predictor |
 | `bridge.ue_timeout_s` | 1.0 | Hold the lens if Unreal sends nothing for this long |

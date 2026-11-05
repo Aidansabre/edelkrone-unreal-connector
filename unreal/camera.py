@@ -249,6 +249,13 @@ class UECamera:
             return float(await self.rc.preset_read(self.preset.name, f.id))
         return float(await self.rc.read_property(self.active_path, "CurrentFocusDistance"))
 
+    async def read_manual_focus(self) -> float | None:
+        f = self._preset_field("ManualFocusDistance", self.active_path)
+        if f:
+            return float(await self.rc.preset_read(self.preset.name, f.id))
+        v = (await self.read_focus_settings() or {}).get("ManualFocusDistance")
+        return float(v) if v is not None else None
+
     async def read_focus_settings(self) -> dict:
         val = await self.rc.read_property(self.active_path, "FocusSettings")
         if isinstance(val, dict):

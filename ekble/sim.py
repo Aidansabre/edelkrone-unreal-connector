@@ -91,6 +91,12 @@ class FakeMotorDevice:
         self.pct += max(-step, min(step, d))
         self.state = 5 if abs(self.target - self.pct) > 1e-6 else 0
 
+    def hand_turn(self, pct: float) -> None:
+        """Someone turns the ring: like the real motor, it doesn't resist once it has reached its target."""
+        self._advance()
+        self._pending.clear()
+        self.pct = self.target = max(0.0, min(100.0, pct))
+
     def handle(self, data: bytes) -> list[bytes]:
         self._advance()
         cmd = data[1]

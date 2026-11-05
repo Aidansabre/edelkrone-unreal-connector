@@ -50,6 +50,8 @@ class FocusStreamer:
         self.limits = limits
         self.stats = StreamStats()
         self.idle_read_hz = 8.0  # faster position feedback while not streaming (manual moves, mapping)
+        self.fast_read_hz = 14.0  # "lens leads": every free write slot is a position read
+        self.fast_reads = False
         self.armed = False
         self._target: float | None = None
         self._cmd: float | None = None
@@ -66,6 +68,13 @@ class FocusStreamer:
     @property
     def commanded(self) -> float | None:
         return self._cmd
+
+    @property
+    def last_sent(self) -> float | None:
+        return self._last_sent
+
+    def resend(self) -> None:
+        self._last_sent = None
 
     def set_target(self, pct: float | None) -> None:
         if pct is None or math.isnan(pct):
@@ -121,10 +130,15 @@ class FocusStreamer:
                     else:
                         self.stats.skipped_deadband += 1
             # Time-based (not tick-based): Bluetooth writes cap the real tick rate well below rate_hz.
-            if self.status_hz and now - self._last_status_t >= 1.0 / self.status_hz:
+            status_hz = self.status_hz / 2 if self.fast_reads else self.status_hz
+            if self.fast_reads and not self.armed:
+                rh = self.fast_read_hz
+            else:
+                rh = self.read_hz if self.armed else max(self.read_hz, self.idle_read_hz)
+            if status_hz and now - self._last_status_t >= 1.0 / status_hz:
                 self._last_status_t = now
                 await m.request_status()
-            elif (rh := (self.read_hz if self.armed else max(self.read_hz, self.idle_read_hz))) and \
+            elif rh and \
                     now - self._last_read_t >= 1.0 / rh:
                 self._last_read_t = now
                 await m.request_position()

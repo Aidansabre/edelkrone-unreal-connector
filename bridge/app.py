@@ -24,6 +24,7 @@ import logging
 import math
 import sys
 import threading
+import time
 
 from ekble.streamer import LeadPredictor
 from tools.common import load_config
@@ -32,10 +33,15 @@ from unreal.rc_client import RCClient
 
 from .backends import READY, MotorBackend, make_backend
 from .control import BridgeControl
+from .handover import EchoFilter, HandDetector
 
 log = logging.getLogger("bridge")
 
-MODES = ("ue_drives", "wheel_drives")
+# ue_drives: Unreal -> lens (a hand move is undone when the hand lets go)
+# wheel_drives: lens -> Unreal
+# both: Unreal leads until the lens is turned by hand; then the lens leads until Unreal's focus is changed
+MODES = ("ue_drives", "wheel_drives", "both")
+DRIVEN_BY_UE = ("ue_drives", "both")
 
 
 class Bridge(BridgeControl):
@@ -54,6 +60,10 @@ class Bridge(BridgeControl):
         self.state = "STARTING"
         self._last_sample_t: float | None = None
         self._last_wheel_write: float | None = None
+        self.leader = "unreal"  # "both" mode: who drives the focus right now
+        self.hand = HandDetector()
+        self.echo = EchoFilter()
+        self._manual_poll_t = 0.0
         self._stop = asyncio.Event()
         self.run_for: float | None = None
         self.calibrate_if_needed = False
@@ -76,7 +86,7 @@ class Bridge(BridgeControl):
     def can_arm(self) -> tuple[bool, str]:
         if self.state not in (READY, "ARMED"):
             return False, f"state is {self.state} {self.backend.stats().get('last_error') or ''}".strip()
-        if self.mode == "ue_drives" and self.cam.age_s() > self.ue_timeout_s:
+        if self.mode in DRIVEN_BY_UE and self.cam.age_s() > self.ue_timeout_s:
             return False, "no recent value from Unreal"
         return True, ""
 
@@ -87,8 +97,13 @@ class Bridge(BridgeControl):
             return
         self.predictor.reset()
         self._last_sample_t = None
-        if self.mode == "ue_drives":
+        self._last_wheel_write = None
+        self.hand.reset()
+        self.echo.clear()
+        self.leader = "lens" if self.mode == "wheel_drives" else "unreal"
+        if self.mode in DRIVEN_BY_UE:
             self.backend.arm()
+        self.backend.fast_reads(self.mode == "wheel_drives")
         self.state = "ARMED"
         self.note(f"ARMED ({self.mode}, lead {self.lead_s * 1000:.0f} ms)")
 
@@ -107,6 +122,8 @@ class Bridge(BridgeControl):
         was_armed = self.state == "ARMED"
         if self.backend.armed:
             await self.backend.disarm(abort=True)
+        self.backend.fast_reads(False)
+        self.leader = "unreal"
         if was_armed:
             self.state = READY
             self.note("DISARMED")
@@ -128,27 +145,88 @@ class Bridge(BridgeControl):
         period = 1.0 / max(self.cfg["unreal"]["poll_hz"], 10)
         while not self._stop.is_set():
             if self.state == "ARMED":
-                if self.mode == "ue_drives":
-                    v = self._ue_target_motor()
-                    if v is None:
-                        if self.backend.armed:
-                            log.warning("Unreal stopped updating; holding focus")
-                            self.backend.hold()  # stop sending; motor holds position
+                try:
+                    if self.mode == "wheel_drives" or (self.mode == "both" and self.leader == "lens"):
+                        await self._lens_leads_tick()
                     else:
-                        if not self.backend.armed:
-                            self.backend.arm()
-                        self.backend.set_target(v)
-                else:  # wheel_drives: motor -> UE
-                    pos = self.backend.position_motor()
-                    if pos is not None and pos != self._last_wheel_write:
-                        cm = self.backend.position_cm()
-                        if cm is not None:
-                            try:
-                                await self.cam.write_manual_focus(cm)
-                                self._last_wheel_write = pos
-                            except Exception as e:
-                                log.debug("write ManualFocusDistance failed: %s", e)
+                        self._unreal_leads_tick()
+                        await self._check_hand()
+                except Exception as e:
+                    log.debug("control tick failed: %s", e)
             await self._sleep(period)
+
+    def _unreal_leads_tick(self) -> None:
+        v = self._ue_target_motor()
+        if v is None:
+            if self.backend.armed:
+                log.warning("Unreal stopped updating; holding focus")
+                self.backend.hold()  # stop sending; motor holds position
+            return
+        if not self.backend.armed:
+            self.backend.arm()
+        self.backend.set_target(v)
+
+    async def _check_hand(self) -> None:
+        now = time.monotonic()
+        ev = self.hand.update(now, self.backend.commanded(), self.backend.position_motor(),
+                              now - self.backend.position_age())
+        if ev == "moved":
+            if self.mode == "both":
+                ok, why = await self.lens_can_lead()
+                if ok:
+                    self.set_leader("lens", "hand on the lens: the lens leads, Unreal follows")
+                    return
+                self.note(f"lens turned by hand, but it can't lead ({why}); "
+                          "it returns to Unreal's focus when you let go", "warn")
+            else:
+                self.note("lens turned by hand; it returns to Unreal's focus when you let go "
+                          "(use 'Both ways' to let the lens lead)", "warn")
+        elif ev == "released":
+            self.backend.resend()
+
+    async def lens_can_lead(self) -> tuple[bool, str]:
+        """The lens can only drive Unreal through ManualFocusDistance, i.e. with Manual focus."""
+        try:
+            await self.cam.read_focus_settings()
+        except Exception as e:
+            return False, f"can't read the camera's focus settings: {e}"
+        if self.cam.focus_method_is_manual() is False:
+            return False, f"the camera's focus method is {self.cam.focus_method}, not Manual"
+        return True, ""
+
+    def set_leader(self, leader: str, msg: str) -> None:
+        if leader == self.leader:
+            return
+        if leader == "lens":
+            self.backend.hold()  # stop sending targets: the motor lets the hand turn the ring
+            self.backend.fast_reads(True)
+            self.echo.clear()
+            self._last_wheel_write = None
+            self._manual_poll_t = 0.0
+        else:
+            self.backend.fast_reads(False)
+            self.predictor.reset()
+            self._last_sample_t = None
+            self.hand.reset()
+            self.backend.arm()  # resumes from the lens's current position, rate-limited
+        self.leader = leader
+        self.note(msg)
+
+    async def _lens_leads_tick(self) -> None:
+        """Lens -> Unreal: write the lens distance to ManualFocusDistance; in "both", watch for Unreal taking over."""
+        pos = self.backend.position_motor()
+        if pos is not None and pos != self._last_wheel_write:
+            cm = self.backend.motor_to_cm(pos)
+            if cm is not None:
+                await self.cam.write_manual_focus(cm)
+                self.echo.wrote(time.monotonic(), cm)
+                self._last_wheel_write = pos
+        now = time.monotonic()
+        if self.mode == "both" and now - self._manual_poll_t >= 0.2:
+            self._manual_poll_t = now
+            manual = await self.cam.read_manual_focus()
+            if self.echo.is_foreign(time.monotonic(), manual):
+                self.set_leader("unreal", f"Unreal changed the focus to {manual:.0f} cm: Unreal leads again")
 
     async def feedback_loop(self) -> None:
         fb = self.cfg["unreal"]["feedback"]
@@ -157,7 +235,7 @@ class Bridge(BridgeControl):
             if fb["enabled"] and self.rc.connected.is_set():
                 try:
                     await self.cam.write_feedback(self.backend.position_cm(), self.backend.position_motor(),
-                                                  f"{self.state}/{self.mode}")
+                                                  f"{self.state}/{self.mode}" + (f"/{self.leader}" if self.mode == "both" else ""))
                 except Exception as e:
                     log.debug("feedback write failed: %s", e)
             await self._sleep(period)

@@ -409,3 +409,113 @@ async def test_lens_map_wizard_forgiving_marks():
     assert "unknown command" in msg and "inf" in msg
     marks = {p.distance_m: round(p.encoder) for p in prof.points}
     assert marks == {0.6: 0, 1.2: 20, INF: 90}
+
+
+# ---------------------------------------------------------------- both ways: hand takeover
+def test_hand_detector():
+    from bridge.handover import HandDetector
+
+    h = HandDetector(threshold_pct=1.5, settle_s=0.6, still_s=0.8)
+    assert h.update(0.0, 50.0, 50.0, 0.0) is None
+    assert h.update(0.3, 50.0, 53.0, 0.3) is None          # target not settled yet
+    assert h.update(0.7, 50.0, 50.1, 0.7) is None          # settled, on target
+    assert h.update(1.0, 50.0, 55.0, 1.0) == "moved"       # off target, nobody asked for it
+    assert h.update(1.2, 50.0, 58.0, 1.2) is None          # still turning
+    assert h.update(1.9, 50.0, 58.1, 1.9) is None
+    assert h.update(2.1, 50.0, 58.1, 2.1) == "released"    # still for 0.8 s
+    assert h.update(2.3, 50.0, 58.1, 2.3) is None          # motor gets time to return
+    # regression (real rig): a read taken 0.4 s after the target settled, lens still arriving
+    h3 = HandDetector()
+    assert h3.update(0.0, 71.0, 34.0, 0.0) is None
+    assert h3.update(0.7, 71.0, 69.3, 0.4) is None          # arrived late, but taken too early to judge
+    assert h3.update(0.8, 71.0, 71.0, 0.75) is None
+    h2 = HandDetector()
+    for i in range(30):  # a moving target is the bridge's own move, never a hand
+        assert h2.update(i * 0.1, 10.0 + i, 5.0 + i, i * 0.1) is None
+
+
+def test_echo_filter():
+    from bridge.handover import EchoFilter
+
+    e = EchoFilter(window_s=1.0)
+    assert not e.is_foreign(0.0, 123.0)                    # nothing written yet
+    e.wrote(0.0, 100.0)
+    e.wrote(0.1, 110.0)
+    assert not e.is_foreign(0.2, 100.0) and not e.is_foreign(0.2, 110.2)  # our own writes, maybe lagging
+    assert e.is_foreign(0.2, 250.0)                        # someone else
+    assert not e.is_foreign(5.0, 110.0)                    # the last write stays known
+    assert e.is_foreign(5.0, 100.0)
+
+
+async def _start(b):
+    task = asyncio.create_task(b.run(True))
+    return task
+
+
+async def _stop(b, task):
+    b._stop.set()
+    await task
+
+
+async def test_bridge_both_ways_hand_takes_over_and_unreal_takes_back(tmp_path):
+    ue = await FakeUE().start()
+    dev = FakeMotorDevice(pct=10, speed_pct_s=300)
+    ue.focus_cm = pct_to_cm(60)
+    try:
+        b = await _bridge(tmp_path, ue, dev, "both")
+        task = await _start(b)
+        await asyncio.sleep(1.5)
+        assert b.state == "ARMED" and b.leader == "unreal" and dev.pct == pytest.approx(60, abs=0.6)
+        dev.hand_turn(30)
+        await asyncio.sleep(1.2)
+        assert b.leader == "lens"
+        assert b.backend.streamer.fast_reads
+        assert ue.focus_cm == pytest.approx(b.backend.motor_to_cm(30), rel=0.02)  # Unreal follows the lens
+        n_moves = len(dev.moves)
+        dev.hand_turn(40)
+        await asyncio.sleep(0.6)
+        assert ue.focus_cm == pytest.approx(b.backend.motor_to_cm(40), rel=0.02)
+        assert len(dev.moves) == n_moves                                           # no targets while the lens leads
+        ue.focus_cm = pct_to_cm(70)                                                # an operator changes it in Unreal
+        await asyncio.sleep(1.5)
+        assert b.leader == "unreal" and dev.pct == pytest.approx(70, abs=0.6)
+        msgs = [e["msg"] for e in b.events]
+        assert any("lens leads" in m for m in msgs) and any("Unreal leads again" in m for m in msgs)
+        await _stop(b, task)
+    finally:
+        await ue.stop()
+
+
+async def test_bridge_ue_drives_undoes_a_hand_move(tmp_path):
+    ue = await FakeUE().start()
+    dev = FakeMotorDevice(pct=60, speed_pct_s=300)
+    ue.focus_cm = pct_to_cm(60)
+    try:
+        b = await _bridge(tmp_path, ue, dev, "ue_drives")
+        task = await _start(b)
+        await asyncio.sleep(1.2)
+        dev.hand_turn(30)
+        await asyncio.sleep(3.0)  # detect, wait for the hand to let go (0.8 s), resend
+        assert dev.pct == pytest.approx(60, abs=0.6)
+        assert any("turned by hand" in e["msg"] for e in b.events)
+        await _stop(b, task)
+    finally:
+        await ue.stop()
+
+
+async def test_bridge_both_ways_tracking_focus_keeps_unreal_leading(tmp_path):
+    ue = await FakeUE().start()
+    ue.focus_method = "Tracking"
+    dev = FakeMotorDevice(pct=60, speed_pct_s=300)
+    ue.focus_cm = pct_to_cm(60)
+    try:
+        b = await _bridge(tmp_path, ue, dev, "both")
+        task = await _start(b)
+        await asyncio.sleep(1.2)
+        dev.hand_turn(30)
+        await asyncio.sleep(3.0)
+        assert b.leader == "unreal" and dev.pct == pytest.approx(60, abs=0.6)
+        assert any("can't lead" in e["msg"] for e in b.events)
+        await _stop(b, task)
+    finally:
+        await ue.stop()

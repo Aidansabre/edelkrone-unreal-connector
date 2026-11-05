@@ -105,6 +105,14 @@ All numbers come from the real FocusPLUS PRO (firmware 0.30) on the test lens, o
 - **Overshoot:** when a fast pull stops, the lead overshoots by about 2 % of travel (at the far end, 15 m → ~38 m) and settles within ~0.5 s.
 - **Max error column:** sudden jumps (the value restore at the end of a run) show up as large max errors. They're steps, not tracking.
 
+## 5c. Turning the lens by hand (2026-11-05)
+- **The motor doesn't hold.** Once it has reached a move-to-percent target, a hand can turn the ring, armed or not, and the position reads follow the hand. With the target steady at 42.9 %, the lens was turned between 4.7 % and 63.7 % and nothing pulled it back.
+- **Normal position reads:** about 3 per second, at the bridge's normal read rate.
+- **"Both ways" on the rig:** 4 hand takeovers, 2 takebacks from Unreal (typing a value in the Details panel) and 1 through the web UI button, all correct.
+  - While the lens led, its position updated **13.5 times per second**, and Unreal's Current Focus Distance followed about **140 ms** behind, smoothing included.
+  - **One false takeover:** the lens was still arriving at a new target (1.8 % short) and was judged on a read taken only 0.4 s after the target settled. Fixed: only reads taken ≥ 0.6 s after settling count.
+- **Unreal stores large values unchanged:** 100000 cm reads back as 100000, so the infinity value doesn't confuse the echo check.
+
 ## 6. Calibration
 
 | Run | Duration | Encoder 0 → 25 % | Result |
